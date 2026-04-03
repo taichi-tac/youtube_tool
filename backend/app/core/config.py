@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""
     SUPABASE_DB_URL: str = ""
 
-    # === Supabase SDK切り替え ===
-    USE_SUPABASE_SDK: bool = False
+    # === Supabase SDK切り替え（本番はTrue、ローカルはFalse） ===
+    USE_SUPABASE_SDK: bool = True
 
     # === 外部API ===
     YOUTUBE_API_KEY: str = ""
