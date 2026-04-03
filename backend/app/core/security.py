@@ -1,14 +1,16 @@
 """
 認証・認可モジュール。
-Supabase Auth JWTトークンの検証を行う。
+Supabase Auth JWTトークンの検証を行う（ES256 JWKS対応）。
 """
 
 import logging
 from typing import Any
 
+import httpx
+import jwt as pyjwt
+from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,57 +23,62 @@ logger = logging.getLogger(__name__)
 # Bearer トークン抽出スキーム
 bearer_scheme = HTTPBearer(auto_error=False)
 
-# Supabase JWTの検証に使う公開鍵URL / シークレット
-# Supabaseは HS256 + JWT secret でJWTを署名する
-ALGORITHM = "HS256"
+# Supabase JWKS エンドポイント
+JWKS_URL = f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+
+# PyJWKClient（公開鍵をキャッシュして取得）
+_jwks_client: PyJWKClient | None = None
+
+
+def _get_jwks_client() -> PyJWKClient:
+    """JWKSクライアントをシングルトンで取得"""
+    global _jwks_client
+    if _jwks_client is None:
+        _jwks_client = PyJWKClient(JWKS_URL)
+    return _jwks_client
 
 
 def _decode_token(token: str) -> dict[str, Any]:
     """
     JWTトークンをデコード・検証する。
-    新しいSupabase キー形式（sb_publishable_, sb_secret_）では
-    JWT署名キーが publishable key や secret key とは異なる場合がある。
-    SUPABASE_KEY → SUPABASE_SERVICE_ROLE_KEY の順で検証を試みる。
+    Supabase の ES256 JWKS を使用して検証。
     """
-    keys_to_try = [settings.SUPABASE_KEY, settings.SUPABASE_SERVICE_ROLE_KEY]
-    last_error: Exception | None = None
+    try:
+        # JWKSから署名キーを取得
+        jwks_client = _get_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
 
-    for key in keys_to_try:
-        if not key:
-            continue
+        # トークンを検証・デコード
+        payload: dict[str, Any] = pyjwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["ES256", "HS256", "RS256"],
+            audience="authenticated",
+        )
+        return payload
+    except pyjwt.InvalidAudienceError:
+        # audience検証なしで再試行
         try:
-            payload: dict[str, Any] = jwt.decode(
+            signing_key = _get_jwks_client().get_signing_key_from_jwt(token)
+            payload = pyjwt.decode(
                 token,
-                key,
-                algorithms=[ALGORITHM],
-                audience="authenticated",
-            )
-            return payload
-        except JWTError as e:
-            last_error = e
-            continue
-
-    # どのキーでも検証できなかった場合は、audience検証なしでも試す
-    for key in keys_to_try:
-        if not key:
-            continue
-        try:
-            payload = jwt.decode(
-                token,
-                key,
-                algorithms=[ALGORITHM],
+                signing_key.key,
+                algorithms=["ES256", "HS256", "RS256"],
                 options={"verify_aud": False},
             )
             return payload
-        except JWTError as e:
-            last_error = e
-            continue
-
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail=f"トークン検証に失敗しました: {str(last_error)}",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"トークン検証に失敗しました: {str(e)}",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"トークン検証に失敗しました: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from e
 
 
 DEV_USER_ID = "00000000-0000-0000-0000-000000000001"
@@ -104,7 +111,6 @@ async def _ensure_user_exists(
             logger.info(f"新規ユーザーを作成しました: auth_id={auth_id}, email={email}")
     except Exception as e:
         logger.warning(f"ユーザー自動作成中にエラー: {e}")
-        # ユーザー作成に失敗してもリクエスト自体は通す
         await db.rollback()
 
 
