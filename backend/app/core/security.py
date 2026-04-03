@@ -86,10 +86,13 @@ DEV_USER_ID = "00000000-0000-0000-0000-000000000001"
 
 async def _ensure_user_exists(
     db: AsyncSession, auth_id: str, email: str | None
-) -> None:
+) -> str:
     """
     usersテーブルにレコードがなければ自動作成する。
     初回ログイン時にユーザーレコードをINSERTする。
+
+    Returns:
+        usersテーブルのid（UUID文字列）
     """
     try:
         result = await db.execute(
@@ -108,10 +111,15 @@ async def _ensure_user_exists(
             )
             db.add(new_user)
             await db.flush()
+            await db.refresh(new_user)
             logger.info(f"新規ユーザーを作成しました: auth_id={auth_id}, email={email}")
+            return str(new_user.id)
+
+        return str(existing_user.id)
     except Exception as e:
         logger.warning(f"ユーザー自動作成中にエラー: {e}")
         await db.rollback()
+        return auth_id
 
 
 async def get_current_user(
@@ -148,11 +156,11 @@ async def get_current_user(
 
     email: str | None = payload.get("email")
 
-    # ユーザーの自動作成（初回ログイン時）
-    await _ensure_user_exists(db, user_id, email)
+    # ユーザーの自動作成（初回ログイン時）→ usersテーブルのidを取得
+    db_user_id = await _ensure_user_exists(db, user_id, email)
 
     return {
-        "user_id": user_id,
+        "user_id": db_user_id,
         "email": email,
         "role": payload.get("role", "authenticated"),
         "raw": payload,
