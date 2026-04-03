@@ -10,13 +10,23 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-# 非同期エンジン生成
+# Supabase Pooler (Transaction mode) 用設定
+# prepared_statement_cache_size=0 でprepared statements無効化
+_connect_args = {}
+_db_url = settings.async_database_url
+if "pooler.supabase.com" in _db_url:
+    _connect_args = {
+        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,
+    }
+
 engine = create_async_engine(
-    settings.async_database_url,
+    _db_url,
     echo=False,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=5,
+    max_overflow=10,
     pool_pre_ping=True,
+    connect_args=_connect_args,
 )
 
 # 非同期セッションファクトリ
