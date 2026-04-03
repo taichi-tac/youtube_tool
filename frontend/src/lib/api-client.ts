@@ -1,7 +1,10 @@
 import { supabase } from "@/lib/supabase";
 
-// バックエンドURL（環境変数またはデフォルト）
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+// バックエンドURL
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL
+  || (typeof window !== "undefined" && window.location.hostname !== "localhost"
+    ? "https://youtube-tool-9cm2.onrender.com"
+    : "http://localhost:8001");
 
 /** プロジェクトIDキャッシュ */
 let _cachedProjectId: string | null = null;
