@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""
     SUPABASE_DB_URL: str = ""
 
+    # === Supabase SDK切り替え ===
+    USE_SUPABASE_SDK: bool = False
+
     # === 外部API ===
     YOUTUBE_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""

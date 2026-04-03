@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_db, use_supabase_sdk
 from app.core.security import get_current_user
 from app.schemas.schemas import (
     KnowledgeChunkResponse,
@@ -57,10 +57,10 @@ async def upload_document(
 
     # ドキュメントをチャンク分割・embedding生成・DB保存
     chunk_count = await ingest_document(
-        db=db,
         project_id=project_id,
         filename=file.filename,
         content=content,
+        db=db,
     )
 
     return KnowledgeUploadResponse(
@@ -79,9 +79,9 @@ async def search_knowledge(
 ) -> list[dict[str, Any]]:
     """ナレッジベースをベクトル検索する"""
     results = await search_similar(
-        db=db,
         project_id=project_id,
         query=body.query,
         top_k=body.top_k,
+        db=db,
     )
     return results

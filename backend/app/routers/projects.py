@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_db, get_supabase, use_supabase_sdk
 from app.core.security import get_current_user
 from app.models.models import Project
 from app.schemas.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
@@ -24,8 +24,17 @@ async def list_projects(
     limit: int = 20,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[Project]:
+):
     """ユーザーのプロジェクト一覧を取得する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        result = sb.table("projects").select("*").eq(
+            "user_id", user["user_id"]
+        ).order(
+            "created_at", desc=True
+        ).range(skip, skip + limit - 1).execute()
+        return result.data
+
     stmt = (
         select(Project)
         .where(Project.user_id == uuid.UUID(user["user_id"]))
@@ -42,8 +51,24 @@ async def create_project(
     body: ProjectCreate,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Project:
+):
     """新規プロジェクトを作成する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        data = {
+            "user_id": user["user_id"],
+            "name": body.name,
+            "channel_id": body.channel_id,
+            "channel_url": body.channel_url,
+            "genre": body.genre,
+            "target_audience": body.target_audience,
+            "concept": body.concept,
+            "center_pin": body.center_pin,
+            "settings": body.settings or {},
+        }
+        result = sb.table("projects").insert(data).execute()
+        return result.data[0]
+
     project = Project(
         user_id=uuid.UUID(user["user_id"]),
         name=body.name,
@@ -66,8 +91,19 @@ async def get_project(
     project_id: uuid.UUID,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Project:
+):
     """プロジェクトを取得する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        result = sb.table("projects").select("*").eq(
+            "id", str(project_id)
+        ).eq(
+            "user_id", user["user_id"]
+        ).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+        return result.data[0]
+
     stmt = select(Project).where(
         Project.id == project_id,
         Project.user_id == uuid.UUID(user["user_id"]),
@@ -85,8 +121,30 @@ async def update_project(
     body: ProjectUpdate,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Project:
+):
     """プロジェクトを更新する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        # 存在確認
+        existing = sb.table("projects").select("id").eq(
+            "id", str(project_id)
+        ).eq(
+            "user_id", user["user_id"]
+        ).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+
+        update_data = body.model_dump(exclude_unset=True)
+        if not update_data:
+            return existing.data[0]
+
+        result = sb.table("projects").update(update_data).eq(
+            "id", str(project_id)
+        ).eq(
+            "user_id", user["user_id"]
+        ).execute()
+        return result.data[0]
+
     stmt = select(Project).where(
         Project.id == project_id,
         Project.user_id == uuid.UUID(user["user_id"]),
@@ -112,6 +170,23 @@ async def delete_project(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """プロジェクトを削除する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        existing = sb.table("projects").select("id").eq(
+            "id", str(project_id)
+        ).eq(
+            "user_id", user["user_id"]
+        ).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+
+        sb.table("projects").delete().eq(
+            "id", str(project_id)
+        ).eq(
+            "user_id", user["user_id"]
+        ).execute()
+        return
+
     stmt = select(Project).where(
         Project.id == project_id,
         Project.user_id == uuid.UUID(user["user_id"]),

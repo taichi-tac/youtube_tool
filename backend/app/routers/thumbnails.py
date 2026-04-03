@@ -9,7 +9,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_db, get_supabase, use_supabase_sdk
 from app.core.security import get_current_user
 from app.models.models import Thumbnail
 from app.schemas.schemas import (
@@ -38,14 +38,20 @@ async def analyze_thumbnails(
 ) -> list[dict[str, Any]]:
     """
     指定した動画IDリストのサムネイルをClaude Visionで分析する。
-
-    サムネURL取得 → Claude Vision分析 → thumbnailsテーブルに保存 → 分析結果を返す。
     """
     if not body.video_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="video_idsを1つ以上指定してください",
         )
+
+    if use_supabase_sdk():
+        from app.services.thumbnail_service import analyze_thumbnails_batch_supabase
+        results = await analyze_thumbnails_batch_supabase(
+            video_ids=body.video_ids,
+            project_id=project_id,
+        )
+        return results
 
     results = await analyze_thumbnails_batch(
         video_ids=body.video_ids,
@@ -61,7 +67,7 @@ async def compare_thumbnails(
     thumbnail_ids: list[uuid.UUID] = Query(..., description="比較するサムネイルIDリスト"),
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[Thumbnail]:
+):
     """
     サムネイル比較用データを返す。
     指定したthumbnail_idsのサムネイルを並列表示用に取得する。
@@ -72,9 +78,22 @@ async def compare_thumbnails(
             detail="比較には2つ以上のサムネイルIDを指定してください",
         )
 
+    if use_supabase_sdk():
+        sb = get_supabase()
+        ids_str = [str(tid) for tid in thumbnail_ids]
+        result = sb.table("thumbnails").select("*").in_("id", ids_str).execute()
+        thumbnails = result.data
+
+        for t in thumbnails:
+            if t.get("project_id") != str(project_id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="指定されたサムネイルはこのプロジェクトに属していません",
+                )
+        return thumbnails
+
     thumbnails = await get_thumbnails_by_ids(db, thumbnail_ids)
 
-    # プロジェクトIDの一致を検証
     for t in thumbnails:
         if t.project_id != project_id:
             raise HTTPException(
@@ -94,11 +113,27 @@ async def list_thumbnails(
     sort_by_score: bool = Query(False, description="click_score順でソート"),
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[Thumbnail]:
+):
     """
     プロジェクトのサムネイル一覧を取得する。
-    click_score順ソート、composition_typeフィルタに対応。
     """
+    if use_supabase_sdk():
+        sb = get_supabase()
+        query = sb.table("thumbnails").select("*").eq(
+            "project_id", str(project_id)
+        )
+
+        if composition_type is not None:
+            query = query.eq("composition_type", composition_type)
+
+        if sort_by_score:
+            query = query.order("click_score", desc=True, nullsfirst=False)
+        else:
+            query = query.order("created_at", desc=True)
+
+        result = query.range(skip, skip + limit - 1).execute()
+        return result.data
+
     return await get_thumbnails_by_project(
         db,
         project_id,
@@ -119,8 +154,19 @@ async def create_thumbnail_endpoint(
     body: ThumbnailCreate,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Thumbnail:
+):
     """サムネイルを作成する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        data = {
+            "project_id": str(project_id),
+            "video_id": str(body.video_id) if body.video_id else None,
+            "image_url": body.image_url,
+            "source_type": body.source_type,
+        }
+        result = sb.table("thumbnails").insert(data).execute()
+        return result.data[0]
+
     return await create_thumbnail(
         db=db,
         project_id=project_id,
@@ -137,8 +183,26 @@ async def update_thumbnail_endpoint(
     body: ThumbnailUpdate,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Thumbnail:
+):
     """サムネイルを更新する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        update_data = body.model_dump(exclude_unset=True)
+        if not update_data:
+            existing = sb.table("thumbnails").select("*").eq(
+                "id", str(thumbnail_id)
+            ).execute()
+            if not existing.data:
+                raise HTTPException(status_code=404, detail="サムネイルが見つかりません")
+            return existing.data[0]
+
+        result = sb.table("thumbnails").update(update_data).eq(
+            "id", str(thumbnail_id)
+        ).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="サムネイルが見つかりません")
+        return result.data[0]
+
     update_data = body.model_dump(exclude_unset=True)
     result = await update_thumbnail(db, thumbnail_id, **update_data)
     if result is None:

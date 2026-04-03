@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_db, get_supabase, use_supabase_sdk
 from app.core.security import get_current_user
 from app.models.models import Keyword
 from app.schemas.schemas import (
@@ -32,8 +32,17 @@ async def list_keywords(
     limit: int = 100,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[Keyword]:
+):
     """プロジェクトのキーワード一覧を取得する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        result = sb.table("keywords").select("*").eq(
+            "project_id", str(project_id)
+        ).order(
+            "created_at", desc=True
+        ).range(skip, skip + limit - 1).execute()
+        return result.data
+
     stmt = (
         select(Keyword)
         .where(Keyword.project_id == project_id)
@@ -51,8 +60,20 @@ async def create_keyword(
     body: KeywordCreate,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Keyword:
+):
     """キーワードを手動追加する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        data = {
+            "project_id": str(project_id),
+            "keyword": body.keyword,
+            "seed_keyword": body.seed_keyword,
+            "source": body.source,
+            "is_selected": body.is_selected,
+        }
+        result = sb.table("keywords").insert(data).execute()
+        return result.data[0]
+
     keyword = Keyword(
         project_id=project_id,
         keyword=body.keyword,
@@ -73,8 +94,29 @@ async def update_keyword(
     body: KeywordUpdate,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Keyword:
+):
     """キーワードを更新する（選択フラグ等）"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        existing = sb.table("keywords").select("id").eq(
+            "id", str(keyword_id)
+        ).eq(
+            "project_id", str(project_id)
+        ).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="キーワードが見つかりません")
+
+        update_data = body.model_dump(exclude_unset=True)
+        if not update_data:
+            return existing.data[0]
+
+        result = sb.table("keywords").update(update_data).eq(
+            "id", str(keyword_id)
+        ).eq(
+            "project_id", str(project_id)
+        ).execute()
+        return result.data[0]
+
     stmt = select(Keyword).where(
         Keyword.id == keyword_id,
         Keyword.project_id == project_id,
@@ -138,6 +180,23 @@ async def delete_keyword(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """キーワードを削除する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        existing = sb.table("keywords").select("id").eq(
+            "id", str(keyword_id)
+        ).eq(
+            "project_id", str(project_id)
+        ).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="キーワードが見つかりません")
+
+        sb.table("keywords").delete().eq(
+            "id", str(keyword_id)
+        ).eq(
+            "project_id", str(project_id)
+        ).execute()
+        return
+
     stmt = select(Keyword).where(
         Keyword.id == keyword_id,
         Keyword.project_id == project_id,

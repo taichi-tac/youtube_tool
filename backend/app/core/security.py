@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, get_supabase, use_supabase_sdk
 from app.models.models import User
 
 logger = logging.getLogger(__name__)
@@ -82,6 +82,37 @@ def _decode_token(token: str) -> dict[str, Any]:
 
 
 DEV_USER_ID = "00000000-0000-0000-0000-000000000001"
+
+
+def _ensure_user_exists_supabase(auth_id_str: str, email: str | None) -> str:
+    """
+    Supabase SDK版: usersテーブルにレコードがなければ自動作成する。
+
+    Returns:
+        usersテーブルのid（UUID文字列）
+    """
+    try:
+        sb = get_supabase()
+        result = sb.table("users").select("id").eq("auth_id", auth_id_str).execute()
+
+        if result.data:
+            return str(result.data[0]["id"])
+
+        # 新規ユーザー作成
+        new_user = sb.table("users").insert({
+            "auth_id": auth_id_str,
+            "email": email or f"{auth_id_str}@unknown.com",
+            "display_name": email.split("@")[0] if email else None,
+            "plan": "free",
+            "quota_used": 0,
+            "quota_limit": 100,
+        }).execute()
+
+        logger.info(f"新規ユーザーを作成しました: auth_id={auth_id_str}, email={email}")
+        return str(new_user.data[0]["id"])
+    except Exception as e:
+        logger.warning(f"ユーザー自動作成中にエラー: {e}")
+        return auth_id_str
 
 
 async def _ensure_user_exists(
@@ -160,7 +191,10 @@ async def get_current_user(
     email: str | None = payload.get("email")
 
     # ユーザーの自動作成（初回ログイン時）→ usersテーブルのidを取得
-    db_user_id = await _ensure_user_exists(db, user_id, email)
+    if use_supabase_sdk():
+        db_user_id = _ensure_user_exists_supabase(user_id, email)
+    else:
+        db_user_id = await _ensure_user_exists(db, user_id, email)
 
     return {
         "user_id": db_user_id,

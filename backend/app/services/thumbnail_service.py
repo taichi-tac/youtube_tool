@@ -343,3 +343,103 @@ async def update_thumbnail(
     await db.flush()
     await db.refresh(thumbnail)
     return thumbnail
+
+
+async def analyze_thumbnails_batch_supabase(
+    video_ids: list[uuid.UUID],
+    project_id: uuid.UUID,
+) -> list[dict[str, Any]]:
+    """
+    Supabase SDK版: 複数動画のサムネイルを一括分析してthumbnailsテーブルに保存する。
+
+    Args:
+        video_ids: 分析対象の動画IDリスト
+        project_id: プロジェクトID
+
+    Returns:
+        分析結果のリスト
+    """
+    from app.core.database import get_supabase
+
+    sb = get_supabase()
+    ids_str = [str(vid) for vid in video_ids]
+
+    # 動画情報を取得
+    video_result = sb.table("videos").select("*").in_(
+        "id", ids_str
+    ).eq(
+        "project_id", str(project_id)
+    ).execute()
+    videos = video_result.data
+
+    if not videos:
+        return []
+
+    results = []
+    for video in videos:
+        thumbnail_url = f"https://img.youtube.com/vi/{video['youtube_video_id']}/maxresdefault.jpg"
+
+        try:
+            analysis = await analyze_thumbnail(thumbnail_url)
+        except Exception as e:
+            logger.error("サムネイル分析に失敗しました (video_id=%s): %s", video["id"], str(e))
+            try:
+                thumbnail_url = f"https://img.youtube.com/vi/{video['youtube_video_id']}/sddefault.jpg"
+                analysis = await analyze_thumbnail(thumbnail_url)
+            except Exception as e2:
+                logger.error("サムネイル分析フォールバックも失敗 (video_id=%s): %s", video["id"], str(e2))
+                results.append({
+                    "video_id": str(video["id"]),
+                    "thumbnail_url": thumbnail_url,
+                    "error": str(e2),
+                })
+                continue
+
+        dominant_colors_data = analysis.get("dominant_colors", [])
+        analysis_raw_text = analysis.get("analysis_raw", "")
+
+        # 既存のサムネイルレコードを検索
+        existing_result = sb.table("thumbnails").select("*").eq(
+            "video_id", str(video["id"])
+        ).eq(
+            "project_id", str(project_id)
+        ).execute()
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        thumb_data = {
+            "image_url": thumbnail_url,
+            "dominant_colors": {"colors": dominant_colors_data},
+            "text_overlay": analysis.get("text_overlay"),
+            "face_count": analysis.get("face_count", 0),
+            "emotion": analysis.get("emotion"),
+            "composition_type": analysis.get("composition_type"),
+            "click_score": analysis.get("click_score", 0),
+            "analysis_raw": {"comment": analysis_raw_text},
+            "analyzed_at": now_iso,
+        }
+
+        if existing_result.data:
+            sb.table("thumbnails").update(thumb_data).eq(
+                "id", existing_result.data[0]["id"]
+            ).execute()
+        else:
+            thumb_data.update({
+                "project_id": str(project_id),
+                "video_id": str(video["id"]),
+                "source_type": "youtube",
+            })
+            sb.table("thumbnails").insert(thumb_data).execute()
+
+        results.append({
+            "video_id": str(video["id"]),
+            "thumbnail_url": thumbnail_url,
+            "dominant_colors": dominant_colors_data,
+            "text_overlay": analysis.get("text_overlay"),
+            "face_count": analysis.get("face_count", 0),
+            "emotion": analysis.get("emotion"),
+            "composition_type": analysis.get("composition_type"),
+            "click_score": analysis.get("click_score", 0),
+            "analysis_raw": analysis_raw_text,
+        })
+
+    return results
