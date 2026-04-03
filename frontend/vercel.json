@@ -1,5 +1,11 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://youtube-tool-9cm2.onrender.com/api/v1/:path*"
+    }
+  ]
 }
