@@ -23,12 +23,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await close_redis()
 
 
+import logging
+import traceback
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(
     title="YouTube運用支援ツール API",
     description="YouTube動画の企画・台本作成・分析を支援するAPIサーバー",
     version="1.0.0",
     lifespan=lifespan,
+    debug=True,
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """全例外をログに出力し、詳細をレスポンスに含める"""
+    tb = traceback.format_exc()
+    logger.error(f"Unhandled exception: {exc}\n{tb}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "traceback": tb},
+    )
 
 # === CORS設定 ===
 app.add_middleware(
