@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import get_db, get_supabase, use_supabase_sdk
+from app.core.database import get_db, get_supabase, use_supabase_sdk, async_session_factory
 from app.models.models import User
 
 logger = logging.getLogger(__name__)
@@ -156,9 +156,25 @@ async def _ensure_user_exists(
         return auth_id_str
 
 
+async def _get_db_optional():
+    """Supabase SDKモード時はNoneを返すDB依存"""
+    if use_supabase_sdk():
+        yield None
+    else:
+        async with async_session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession | None = Depends(_get_db_optional),
 ) -> dict[str, Any]:
     """
     現在のユーザー情報を取得する依存関数。

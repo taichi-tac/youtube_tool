@@ -50,8 +50,11 @@ class Base(DeclarativeBase):
     pass
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI依存関数: 非同期DBセッションを提供する"""
+async def get_db() -> AsyncGenerator[AsyncSession | None, None]:
+    """FastAPI依存関数: 非同期DBセッションを提供する。Supabase SDKモード時はNone"""
+    if use_supabase_sdk():
+        yield None
+        return
     async with async_session_factory() as session:
         try:
             yield session
