@@ -1,9 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
-// 本番: Vercelのrewritesを経由（同一オリジン）、ローカル: バックエンドURL直指定
-const BASE_URL = typeof window !== "undefined" && window.location.hostname !== "localhost"
-  ? window.location.origin  // 本番: 同一オリジン経由でrewritesを使う
-  : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001");
+// バックエンドURL（環境変数またはデフォルト）
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
 /** プロジェクトIDキャッシュ */
 let _cachedProjectId: string | null = null;
