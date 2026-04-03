@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import PageHeader from "@/components/layout/PageHeader";
 import Link from "next/link";
-import { apiClient, PROJECT_ID } from "@/lib/api-client";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import type { Script } from "@/types/script";
 import { formatDate } from "@/lib/utils";
 
@@ -29,7 +29,8 @@ export default function ScriptsPage() {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiClient.get<Script[]>(`/api/v1/scripts/${PROJECT_ID}`);
+        const pid = await getProjectId();
+        const result = await apiClient.get<Script[]>(`/api/v1/scripts/${pid}`);
         setScripts(result);
       } catch (err) {
         setError(err instanceof Error ? err.message : "台本一覧の取得に失敗しました");

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
-import { apiClient, PROJECT_ID } from "@/lib/api-client";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { Script, ScriptUpdateRequest } from "@/types/script";
 
@@ -42,8 +42,9 @@ export default function ScriptEditPage() {
       setLoading(true);
       setError(null);
       try {
+        const pid = await getProjectId();
         const result = await apiClient.get<Script>(
-          `/api/v1/scripts/${PROJECT_ID}/${scriptId}`,
+          `/api/v1/scripts/${pid}/${scriptId}`,
         );
         setScript(result);
         setEditTitle(result.title);
@@ -70,8 +71,9 @@ export default function ScriptEditPage() {
         body: editBody || undefined,
         closing: editClosing || undefined,
       };
+      const pid = await getProjectId();
       const updated = await apiClient.patch<Script>(
-        `/api/v1/scripts/${PROJECT_ID}/${scriptId}`,
+        `/api/v1/scripts/${pid}/${scriptId}`,
         update,
       );
       setScript(updated);

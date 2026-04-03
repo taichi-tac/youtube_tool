@@ -2,7 +2,37 @@ import { supabase } from "@/lib/supabase";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
-/** 開発用固定プロジェクトID */
+/** プロジェクトIDキャッシュ */
+let _cachedProjectId: string | null = null;
+
+/**
+ * ユーザーのプロジェクトIDを取得する。
+ * プロジェクトがなければ自動で「マイチャンネル」を作成する。
+ */
+export async function getProjectId(): Promise<string> {
+  if (_cachedProjectId) return _cachedProjectId;
+
+  try {
+    const projects = await apiClient.get<{ id: string }[]>("/api/v1/projects/");
+    if (projects.length > 0) {
+      _cachedProjectId = projects[0].id;
+      return _cachedProjectId;
+    }
+
+    // プロジェクトがなければ自動作成
+    const newProject = await apiClient.post<{ id: string }>("/api/v1/projects/", {
+      name: "マイチャンネル",
+      genre: "YouTube運用",
+    });
+    _cachedProjectId = newProject.id;
+    return _cachedProjectId;
+  } catch {
+    // フォールバック
+    return "00000000-0000-0000-0000-000000000002";
+  }
+}
+
+/** 開発用固定値（後方互換） */
 export const PROJECT_ID = "00000000-0000-0000-0000-000000000002";
 
 interface RequestOptions extends RequestInit {

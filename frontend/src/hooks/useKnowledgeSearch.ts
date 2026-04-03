@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { apiClient, PROJECT_ID } from "@/lib/api-client";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import type { KnowledgeChunk } from "@/types/knowledge";
 
 export function useKnowledgeSearch() {
@@ -15,8 +15,9 @@ export function useKnowledgeSearch() {
     setLoading(true);
     setError(null);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.post<KnowledgeChunk[]>(
-        `/api/v1/knowledge/${PROJECT_ID}/search`,
+        `/api/v1/knowledge/${pid}/search`,
         { query, top_k: topK },
       );
       setChunks(result);

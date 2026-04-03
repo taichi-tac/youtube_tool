@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { apiClient, PROJECT_ID } from "@/lib/api-client";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import type { ThumbnailAnalysis } from "@/types/video";
 
 export function useThumbnailAnalysis() {
@@ -15,8 +15,9 @@ export function useThumbnailAnalysis() {
     setLoading(true);
     setError(null);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.get<ThumbnailAnalysis[]>(
-        `/api/v1/thumbnails/${PROJECT_ID}`,
+        `/api/v1/thumbnails/${pid}`,
       );
       setThumbnails(result);
     } catch (err) {
@@ -31,8 +32,9 @@ export function useThumbnailAnalysis() {
     setAnalyzing(true);
     setError(null);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.post<ThumbnailAnalysis[]>(
-        `/api/v1/thumbnails/${PROJECT_ID}/analyze`,
+        `/api/v1/thumbnails/${pid}/analyze`,
         { video_ids: videoIds },
       );
       setThumbnails((prev) => {

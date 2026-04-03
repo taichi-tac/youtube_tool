@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { apiClient, PROJECT_ID } from "@/lib/api-client";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import type { Script, ScriptGenerateRequest } from "@/types/script";
 
 export function useScriptGeneration() {
@@ -33,8 +33,9 @@ export function useScriptGeneration() {
     abortRef.current = controller;
 
     try {
+      const pid = await getProjectId();
       const response = await apiClient.postStream(
-        `/api/v1/scripts/${PROJECT_ID}/generate`,
+        `/api/v1/scripts/${pid}/generate`,
         request,
         { signal: controller.signal },
       );

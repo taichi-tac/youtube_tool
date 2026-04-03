@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import PageHeader from "@/components/layout/PageHeader";
 import Link from "next/link";
-import { apiClient, PROJECT_ID } from "@/lib/api-client";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import { formatDate } from "@/lib/utils";
 import type { Project } from "@/types/project";
 import type { Keyword } from "@/types/keyword";
@@ -36,12 +36,14 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [project, keywords, videos, scripts] = await Promise.all([
-          apiClient.get<Project>(`/api/v1/projects/${PROJECT_ID}`),
-          apiClient.get<Keyword[]>(`/api/v1/keywords/${PROJECT_ID}`),
-          apiClient.get<Video[]>(`/api/v1/videos/${PROJECT_ID}`),
-          apiClient.get<Script[]>(`/api/v1/scripts/${PROJECT_ID}`),
+        const pid = await getProjectId();
+        const [keywords, videos, scripts] = await Promise.all([
+          apiClient.get<Keyword[]>(`/api/v1/keywords/${pid}`),
+          apiClient.get<Video[]>(`/api/v1/videos/${pid}`),
+          apiClient.get<Script[]>(`/api/v1/scripts/${pid}`),
         ]);
+        const projects = await apiClient.get<Project[]>("/api/v1/projects/");
+        const project = projects[0];
         setStats({
           projectName: project.name,
           keywords: keywords.length,
@@ -69,7 +71,7 @@ export default function DashboardPage() {
 
   const statCards = stats
     ? [
-        { label: "プロジェクト", value: stats.projectName, href: `/projects/${PROJECT_ID}` },
+        { label: "プロジェクト", value: stats.projectName, href: "/projects" },
         { label: "キーワード数", value: String(stats.keywords), href: "/keywords" },
         { label: "動画数", value: String(stats.videos), href: "/videos" },
         { label: "台本数", value: String(stats.scripts), href: "/scripts" },

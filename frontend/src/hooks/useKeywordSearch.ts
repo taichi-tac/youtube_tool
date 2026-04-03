@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { apiClient, PROJECT_ID } from "@/lib/api-client";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import type { Keyword, KeywordSuggestResponse } from "@/types/keyword";
 
 export function useKeywordSearch() {
@@ -15,8 +15,9 @@ export function useKeywordSearch() {
     setLoading(true);
     setError(null);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.get<Keyword[]>(
-        `/api/v1/keywords/${PROJECT_ID}`,
+        `/api/v1/keywords/${pid}`,
       );
       setKeywords(result);
     } catch (err) {
@@ -32,8 +33,9 @@ export function useKeywordSearch() {
     setError(null);
     setSuggestions([]);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.post<KeywordSuggestResponse>(
-        `/api/v1/keywords/${PROJECT_ID}/suggest`,
+        `/api/v1/keywords/${pid}/suggest`,
         { seed_keyword: seedKeyword, language },
       );
       setSuggestions(result.suggestions);
@@ -47,8 +49,9 @@ export function useKeywordSearch() {
   /** キーワードをDBに保存 */
   const saveKeyword = useCallback(async (keyword: string, seedKeyword: string) => {
     try {
+      const pid = await getProjectId();
       const created = await apiClient.post<Keyword>(
-        `/api/v1/keywords/${PROJECT_ID}`,
+        `/api/v1/keywords/${pid}`,
         {
           keyword,
           seed_keyword: seedKeyword,

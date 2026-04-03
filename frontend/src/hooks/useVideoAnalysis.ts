@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { apiClient, PROJECT_ID } from "@/lib/api-client";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import type { Video, VideoComment, CommentAnalysis } from "@/types/video";
 
 export function useVideoAnalysis() {
@@ -22,8 +22,9 @@ export function useVideoAnalysis() {
     setLoading(true);
     setError(null);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.get<Video[]>(
-        `/api/v1/videos/${PROJECT_ID}`,
+        `/api/v1/videos/${pid}`,
       );
       setVideos(result);
     } catch (err) {
@@ -38,8 +39,9 @@ export function useVideoAnalysis() {
     setLoading(true);
     setError(null);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.post<Video[]>(
-        `/api/v1/videos/${PROJECT_ID}/search`,
+        `/api/v1/videos/${pid}/search`,
         { query, max_results: maxResults, order: "relevance" },
       );
       setVideos(result);
@@ -55,8 +57,9 @@ export function useVideoAnalysis() {
     setLoading(true);
     setError(null);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.get<Video>(
-        `/api/v1/videos/${PROJECT_ID}/${videoId}`,
+        `/api/v1/videos/${pid}/${videoId}`,
       );
       return result;
     } catch (err) {
@@ -72,8 +75,9 @@ export function useVideoAnalysis() {
     setCommentsLoading(true);
     setError(null);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.post<VideoComment[]>(
-        `/api/v1/videos/${PROJECT_ID}/${videoId}/comments`,
+        `/api/v1/videos/${pid}/${videoId}/comments`,
       );
       setComments(result);
     } catch (err) {
@@ -88,8 +92,9 @@ export function useVideoAnalysis() {
     setAnalysisLoading(true);
     setError(null);
     try {
+      const pid = await getProjectId();
       const result = await apiClient.post<CommentAnalysis>(
-        `/api/v1/videos/${PROJECT_ID}/${videoId}/analyze-comments`,
+        `/api/v1/videos/${pid}/${videoId}/analyze-comments`,
       );
       setCommentAnalysis(result);
     } catch (err) {
