@@ -1,0 +1,53 @@
+# =============================================
+# YouTube運用支援ツール .gitignore
+# =============================================
+
+# === 環境変数・シークレット ===
+.env
+.env.local
+.env.production
+.env.*.local
+
+# === TAISUN Agent ===
+.claude/
+.mcp.json
+
+# === Python / バックエンド ===
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# === Node.js / フロントエンド ===
+node_modules/
+.next/
+out/
+.vercel
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# === Docker ===
+docker-compose.override.yml
+
+# === ログ ===
+*.log
+npm-debug.log*
+
+# === ナレッジZIP・解凍フォルダ（大容量） ===
+*.zip
+簡易第二の脳/
+市場から穴場を探す/
+和理論 企画作成から、台本まで、和理論を使って構築できる/
+
+# === その他 ===
+0

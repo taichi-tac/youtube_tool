@@ -1,0 +1,231 @@
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
+import PageHeader from "@/components/layout/PageHeader";
+import { useThumbnailAnalysis } from "@/hooks/useThumbnailAnalysis";
+import type { ThumbnailAnalysis } from "@/types/video";
+
+export default function ThumbnailsPage() {
+  const { thumbnails, loading, error, fetchThumbnails } = useThumbnailAnalysis();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [compareMode, setCompareMode] = useState(false);
+
+  useEffect(() => {
+    fetchThumbnails();
+  }, [fetchThumbnails]);
+
+  // click_score順ソート
+  const sortedThumbnails = useMemo(() => {
+    return [...thumbnails].sort((a, b) => (b.click_score ?? 0) - (a.click_score ?? 0));
+  }, [thumbnails]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        if (next.size < 3) {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const selectedThumbnails = sortedThumbnails.filter((t) => selectedIds.has(t.id));
+
+  return (
+    <div>
+      <PageHeader
+        title="サムネ分析"
+        description="YouTubeサムネイルの分析と比較"
+        actions={
+          <button
+            onClick={() => {
+              setCompareMode(!compareMode);
+              if (compareMode) setSelectedIds(new Set());
+            }}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              compareMode
+                ? "bg-purple-600 text-white hover:bg-purple-700"
+                : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            {compareMode ? "比較モードOFF" : "比較モード"}
+          </button>
+        }
+      />
+
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</div>
+      )}
+
+      {/* 比較パネル */}
+      {compareMode && selectedThumbnails.length > 0 && (
+        <div className="mb-6 rounded-lg border-2 border-purple-200 bg-purple-50 p-6">
+          <h2 className="mb-4 text-sm font-semibold text-purple-900">
+            サムネ比較 ({selectedThumbnails.length}/3)
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {selectedThumbnails.map((thumb) => (
+              <CompareCard key={thumb.id} thumb={thumb} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {compareMode && selectedThumbnails.length === 0 && (
+        <div className="mb-6 rounded-lg border-2 border-dashed border-purple-300 p-8 text-center text-sm text-purple-400">
+          比較するサムネイルを2-3枚選択してください
+        </div>
+      )}
+
+      {loading ? (
+        <div className="py-12 text-center text-sm text-gray-500">読み込み中...</div>
+      ) : sortedThumbnails.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center">
+          <p className="text-sm text-gray-400">分析済みサムネイルがありません</p>
+          <p className="mt-1 text-xs text-gray-400">
+            動画一覧ページからサムネ分析を実行してください
+          </p>
+        </div>
+      ) : (
+        <>
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">
+            分析済みサムネイル ({sortedThumbnails.length}件)
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {sortedThumbnails.map((thumb) => (
+              <ThumbnailCard
+                key={thumb.id}
+                thumb={thumb}
+                compareMode={compareMode}
+                isSelected={selectedIds.has(thumb.id)}
+                onToggle={() => toggleSelect(thumb.id)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ThumbnailCard({
+  thumb,
+  compareMode,
+  isSelected,
+  onToggle,
+}: {
+  thumb: ThumbnailAnalysis;
+  compareMode: boolean;
+  isSelected: boolean;
+  onToggle: () => void;
+}) {
+  const scoreColor =
+    thumb.click_score >= 80
+      ? "bg-green-100 text-green-700"
+      : thumb.click_score >= 60
+      ? "bg-yellow-100 text-yellow-700"
+      : "bg-red-100 text-red-700";
+
+  return (
+    <div
+      onClick={compareMode ? onToggle : undefined}
+      className={`overflow-hidden rounded-lg border bg-white transition-all hover:shadow-md ${
+        compareMode ? "cursor-pointer" : ""
+      } ${
+        isSelected
+          ? "border-purple-500 ring-2 ring-purple-200"
+          : "border-gray-200"
+      }`}
+    >
+      <div className="aspect-video bg-gray-100 relative">
+        <img
+          src={thumb.thumbnail_url}
+          alt={thumb.video_title}
+          className="h-full w-full object-cover"
+        />
+        <span
+          className={`absolute top-2 right-2 rounded-full px-2.5 py-0.5 text-sm font-bold ${scoreColor}`}
+        >
+          {thumb.click_score}
+        </span>
+      </div>
+      <div className="p-4">
+        <h3 className="text-sm font-medium text-gray-900 line-clamp-2">
+          {thumb.video_title}
+        </h3>
+        <div className="mt-2 space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">構図タイプ</span>
+            <span className="font-medium text-gray-700">{thumb.composition_type}</span>
+          </div>
+          {/* ドミナントカラー */}
+          {thumb.dominant_colors && thumb.dominant_colors.length > 0 && (
+            <div className="flex items-center gap-1 mt-2">
+              <span className="text-xs text-gray-500 mr-1">配色:</span>
+              {thumb.dominant_colors.map((color, i) => (
+                <span
+                  key={i}
+                  className="inline-block h-5 w-5 rounded-full border border-gray-200"
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompareCard({ thumb }: { thumb: ThumbnailAnalysis }) {
+  const scoreColor =
+    thumb.click_score >= 80
+      ? "text-green-700"
+      : thumb.click_score >= 60
+      ? "text-yellow-700"
+      : "text-red-700";
+
+  return (
+    <div className="rounded-lg border border-purple-200 bg-white overflow-hidden">
+      <div className="aspect-video bg-gray-100">
+        <img
+          src={thumb.thumbnail_url}
+          alt={thumb.video_title}
+          className="h-full w-full object-cover"
+        />
+      </div>
+      <div className="p-3">
+        <h4 className="text-xs font-medium text-gray-900 line-clamp-1">
+          {thumb.video_title}
+        </h4>
+        <div className="mt-2 space-y-1 text-xs">
+          <div className="flex justify-between">
+            <span className="text-gray-500">Click Score</span>
+            <span className={`font-bold ${scoreColor}`}>{thumb.click_score}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">構図</span>
+            <span className="text-gray-700">{thumb.composition_type}</span>
+          </div>
+          {thumb.dominant_colors && thumb.dominant_colors.length > 0 && (
+            <div className="flex items-center gap-1 mt-1">
+              {thumb.dominant_colors.map((color, i) => (
+                <span
+                  key={i}
+                  className="inline-block h-4 w-4 rounded-full border border-gray-200"
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
