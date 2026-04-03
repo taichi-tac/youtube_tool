@@ -85,7 +85,7 @@ DEV_USER_ID = "00000000-0000-0000-0000-000000000001"
 
 
 async def _ensure_user_exists(
-    db: AsyncSession, auth_id: str, email: str | None
+    db: AsyncSession, auth_id_str: str, email: str | None
 ) -> str:
     """
     usersテーブルにレコードがなければ自動作成する。
@@ -94,6 +94,9 @@ async def _ensure_user_exists(
     Returns:
         usersテーブルのid（UUID文字列）
     """
+    import uuid as uuid_mod
+    auth_id = uuid_mod.UUID(auth_id_str)
+
     try:
         result = await db.execute(
             select(User).where(User.auth_id == auth_id)
@@ -103,7 +106,7 @@ async def _ensure_user_exists(
         if existing_user is None:
             new_user = User(
                 auth_id=auth_id,
-                email=email or f"{auth_id}@unknown.com",
+                email=email or f"{auth_id_str}@unknown.com",
                 display_name=email.split("@")[0] if email else None,
                 plan="free",
                 quota_used=0,
@@ -112,14 +115,14 @@ async def _ensure_user_exists(
             db.add(new_user)
             await db.flush()
             await db.refresh(new_user)
-            logger.info(f"新規ユーザーを作成しました: auth_id={auth_id}, email={email}")
+            logger.info(f"新規ユーザーを作成しました: auth_id={auth_id_str}, email={email}")
             return str(new_user.id)
 
         return str(existing_user.id)
     except Exception as e:
         logger.warning(f"ユーザー自動作成中にエラー: {e}")
         await db.rollback()
-        return auth_id
+        return auth_id_str
 
 
 async def get_current_user(
