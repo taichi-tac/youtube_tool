@@ -123,19 +123,20 @@ function ThumbnailCard({
   isSelected: boolean;
   onToggle: () => void;
 }) {
+  const score = thumb.click_score ?? 0;
   const scoreColor =
-    thumb.click_score >= 80
+    score >= 8
       ? "bg-green-100 text-green-700"
-      : thumb.click_score >= 60
+      : score >= 5
       ? "bg-yellow-100 text-yellow-700"
       : "bg-red-100 text-red-700";
+
+  const colors = thumb.dominant_colors?.colors ?? [];
 
   return (
     <div
       onClick={compareMode ? onToggle : undefined}
-      className={`overflow-hidden rounded-lg border bg-white transition-all hover:shadow-md ${
-        compareMode ? "cursor-pointer" : ""
-      } ${
+      className={`overflow-hidden rounded-lg border bg-white transition-all hover:shadow-md cursor-pointer ${
         isSelected
           ? "border-purple-500 ring-2 ring-purple-200"
           : "border-gray-200"
@@ -143,38 +144,50 @@ function ThumbnailCard({
     >
       <div className="aspect-video bg-gray-100 relative">
         <img
-          src={thumb.thumbnail_url}
-          alt={thumb.video_title}
+          src={thumb.image_url}
+          alt="サムネイル"
           className="h-full w-full object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).src = '/globe.svg'; }}
         />
         <span
           className={`absolute top-2 right-2 rounded-full px-2.5 py-0.5 text-sm font-bold ${scoreColor}`}
         >
-          {thumb.click_score}
+          {score}/10
         </span>
       </div>
       <div className="p-4">
-        <h3 className="text-sm font-medium text-gray-900 line-clamp-2">
-          {thumb.video_title}
-        </h3>
-        <div className="mt-2 space-y-1">
+        <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-500">構図タイプ</span>
-            <span className="font-medium text-gray-700">{thumb.composition_type}</span>
+            <span className="font-medium text-gray-700">{thumb.composition_type ?? "未分析"}</span>
           </div>
-          {/* ドミナントカラー */}
-          {thumb.dominant_colors && thumb.dominant_colors.length > 0 && (
-            <div className="flex items-center gap-1 mt-2">
+          {thumb.text_overlay && (
+            <div className="text-xs">
+              <span className="text-gray-500">テキスト: </span>
+              <span className="text-gray-700">{thumb.text_overlay}</span>
+            </div>
+          )}
+          {thumb.face_count != null && thumb.face_count > 0 && (
+            <div className="text-xs">
+              <span className="text-gray-500">顔検出: </span>
+              <span className="text-gray-700">{thumb.face_count}人 {thumb.emotion && `(${thumb.emotion})`}</span>
+            </div>
+          )}
+          {colors.length > 0 && (
+            <div className="flex items-center gap-1 mt-1">
               <span className="text-xs text-gray-500 mr-1">配色:</span>
-              {thumb.dominant_colors.map((color, i) => (
+              {colors.map((c, i) => (
                 <span
                   key={i}
                   className="inline-block h-5 w-5 rounded-full border border-gray-200"
-                  style={{ backgroundColor: color }}
-                  title={color}
+                  style={{ backgroundColor: c.hex }}
+                  title={c.name}
                 />
               ))}
             </div>
+          )}
+          {thumb.analysis_raw?.comment && (
+            <p className="text-xs text-gray-600 mt-2 line-clamp-3">{thumb.analysis_raw.comment}</p>
           )}
         </div>
       </div>
@@ -183,46 +196,45 @@ function ThumbnailCard({
 }
 
 function CompareCard({ thumb }: { thumb: ThumbnailAnalysis }) {
+  const score = thumb.click_score ?? 0;
   const scoreColor =
-    thumb.click_score >= 80
-      ? "text-green-700"
-      : thumb.click_score >= 60
-      ? "text-yellow-700"
-      : "text-red-700";
+    score >= 8 ? "text-green-700" : score >= 5 ? "text-yellow-700" : "text-red-700";
+  const colors = thumb.dominant_colors?.colors ?? [];
 
   return (
     <div className="rounded-lg border border-purple-200 bg-white overflow-hidden">
       <div className="aspect-video bg-gray-100">
         <img
-          src={thumb.thumbnail_url}
-          alt={thumb.video_title}
+          src={thumb.image_url}
+          alt="サムネイル"
           className="h-full w-full object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).src = '/globe.svg'; }}
         />
       </div>
       <div className="p-3">
-        <h4 className="text-xs font-medium text-gray-900 line-clamp-1">
-          {thumb.video_title}
-        </h4>
         <div className="mt-2 space-y-1 text-xs">
           <div className="flex justify-between">
             <span className="text-gray-500">Click Score</span>
-            <span className={`font-bold ${scoreColor}`}>{thumb.click_score}</span>
+            <span className={`font-bold ${scoreColor}`}>{score}/10</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">構図</span>
-            <span className="text-gray-700">{thumb.composition_type}</span>
+            <span className="text-gray-700">{thumb.composition_type ?? "-"}</span>
           </div>
-          {thumb.dominant_colors && thumb.dominant_colors.length > 0 && (
+          {colors.length > 0 && (
             <div className="flex items-center gap-1 mt-1">
-              {thumb.dominant_colors.map((color, i) => (
+              {colors.map((c, i) => (
                 <span
                   key={i}
                   className="inline-block h-4 w-4 rounded-full border border-gray-200"
-                  style={{ backgroundColor: color }}
-                  title={color}
+                  style={{ backgroundColor: c.hex }}
+                  title={c.name}
                 />
               ))}
             </div>
+          )}
+          {thumb.analysis_raw?.comment && (
+            <p className="text-gray-600 mt-1 line-clamp-2">{thumb.analysis_raw.comment}</p>
           )}
         </div>
       </div>

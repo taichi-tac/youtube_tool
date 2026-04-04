@@ -57,14 +57,17 @@ export interface CommentAnalysis {
 /** サムネ分析結果 */
 export interface ThumbnailAnalysis {
   id: string;
-  video_id: string;
-  thumbnail_url: string;
-  video_title: string;
-  click_score: number;
-  composition_type: string;
-  dominant_colors: string[];
+  video_id: string | null;
+  project_id: string;
+  image_url: string;
+  source_type: string;
+  click_score: number | null;
+  composition_type: string | null;
+  dominant_colors: { colors?: { hex: string; name: string }[] } | null;
   text_overlay: string | null;
-  face_detected: boolean;
-  suggestions: string[];
-  analyzed_at: string;
+  face_count: number | null;
+  emotion: string | null;
+  analysis_raw: { comment?: string } | null;
+  analyzed_at: string | null;
+  created_at: string;
 }
