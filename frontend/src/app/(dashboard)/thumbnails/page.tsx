@@ -9,6 +9,7 @@ export default function ThumbnailsPage() {
   const { thumbnails, loading, error, fetchThumbnails } = useThumbnailAnalysis();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [compareMode, setCompareMode] = useState(false);
+  const [detailThumb, setDetailThumb] = useState<ThumbnailAnalysis | null>(null);
 
   useEffect(() => {
     fetchThumbnails();
@@ -103,10 +104,102 @@ export default function ThumbnailsPage() {
                 compareMode={compareMode}
                 isSelected={selectedIds.has(thumb.id)}
                 onToggle={() => toggleSelect(thumb.id)}
+                onDetail={() => setDetailThumb(thumb)}
               />
             ))}
           </div>
         </>
+      )}
+
+      {/* 詳細モーダル */}
+      {detailThumb && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setDetailThumb(null)}
+        >
+          <div
+            className="relative mx-4 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setDetailThumb(null)}
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl"
+            >
+              &times;
+            </button>
+
+            <h2 className="mb-4 text-lg font-bold text-gray-900">サムネ分析詳細</h2>
+
+            <div className="aspect-video mb-4 overflow-hidden rounded-lg bg-gray-100">
+              <img
+                src={detailThumb.image_url}
+                alt="サムネイル"
+                className="h-full w-full object-cover"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+                <span className="text-sm font-medium text-gray-700">CTRスコア</span>
+                <span className={`text-2xl font-bold ${
+                  (detailThumb.click_score ?? 0) >= 8 ? "text-green-600" :
+                  (detailThumb.click_score ?? 0) >= 5 ? "text-yellow-600" : "text-red-600"
+                }`}>
+                  {detailThumb.click_score ?? 0}/10
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border p-3">
+                  <span className="text-xs text-gray-500">構図タイプ</span>
+                  <p className="text-sm font-medium text-gray-900">{detailThumb.composition_type ?? "未分析"}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <span className="text-xs text-gray-500">顔検出</span>
+                  <p className="text-sm font-medium text-gray-900">
+                    {detailThumb.face_count ? `${detailThumb.face_count}人` : "なし"}
+                    {detailThumb.emotion && ` (${detailThumb.emotion})`}
+                  </p>
+                </div>
+              </div>
+
+              {detailThumb.text_overlay && (
+                <div className="rounded-lg border p-3">
+                  <span className="text-xs text-gray-500">テキスト要素</span>
+                  <p className="text-sm text-gray-900">{detailThumb.text_overlay}</p>
+                </div>
+              )}
+
+              {(detailThumb.dominant_colors?.colors ?? []).length > 0 && (
+                <div className="rounded-lg border p-3">
+                  <span className="text-xs text-gray-500 block mb-2">配色</span>
+                  <div className="flex items-center gap-2">
+                    {detailThumb.dominant_colors!.colors!.map((c, i) => (
+                      <div key={i} className="flex items-center gap-1">
+                        <span
+                          className="inline-block h-6 w-6 rounded-full border border-gray-200"
+                          style={{ backgroundColor: c.hex }}
+                        />
+                        <span className="text-xs text-gray-600">{c.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {detailThumb.analysis_raw?.comment && (
+                <div className="rounded-lg bg-blue-50 p-4">
+                  <span className="text-xs font-medium text-blue-700 block mb-1">AI分析コメント</span>
+                  <p className="text-sm text-gray-800 leading-relaxed">{detailThumb.analysis_raw.comment}</p>
+                </div>
+              )}
+
+              <div className="text-xs text-gray-400 text-right">
+                分析日時: {detailThumb.analyzed_at ? new Date(detailThumb.analyzed_at).toLocaleString("ja-JP") : "不明"}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -117,11 +210,13 @@ function ThumbnailCard({
   compareMode,
   isSelected,
   onToggle,
+  onDetail,
 }: {
   thumb: ThumbnailAnalysis;
   compareMode: boolean;
   isSelected: boolean;
   onToggle: () => void;
+  onDetail: () => void;
 }) {
   const score = thumb.click_score ?? 0;
   const scoreColor =
@@ -135,7 +230,7 @@ function ThumbnailCard({
 
   return (
     <div
-      onClick={compareMode ? onToggle : undefined}
+      onClick={compareMode ? onToggle : onDetail}
       className={`overflow-hidden rounded-lg border bg-white transition-all hover:shadow-md cursor-pointer ${
         isSelected
           ? "border-purple-500 ring-2 ring-purple-200"
