@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const navigation = [
   { name: "ダッシュボード", href: "/", icon: "📊" },
   { name: "企画提案", href: "/planning", icon: "🎯" },
+  { name: "一気通貫", href: "/pipeline", icon: "🚀" },
   { name: "キーワード検索", href: "/keywords", icon: "🔍" },
   { name: "動画一覧", href: "/videos", icon: "🎬" },
   { name: "台本一覧", href: "/scripts", icon: "📝" },

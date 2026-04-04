@@ -20,18 +20,10 @@ async def generate_script_stream(
     uniqueness: Optional[str] = None,
     additional_context: Optional[str] = None,
     rag_context: Optional[str] = None,
+    comment_insights: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """
     Claude APIを使用して台本をストリーミング生成する。
-
-    Args:
-        title: 動画タイトル
-        target_viewer: ターゲット視聴者
-        viewer_problem: 視聴者の悩み
-        promise: 動画の約束・ベネフィット
-        uniqueness: 独自性・差別化ポイント
-        additional_context: 追加コンテキスト
-        rag_context: RAGから取得した参考情報
 
     Yields:
         生成されたテキストの各チャンク
@@ -45,6 +37,7 @@ async def generate_script_stream(
         uniqueness=uniqueness,
         additional_context=additional_context,
         rag_context=rag_context,
+        comment_insights=comment_insights,
     )
 
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)

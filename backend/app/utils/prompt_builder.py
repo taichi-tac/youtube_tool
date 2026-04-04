@@ -20,6 +20,7 @@ def build_script_prompt(
     uniqueness: Optional[str] = None,
     additional_context: Optional[str] = None,
     rag_context: Optional[str] = None,
+    comment_insights: Optional[str] = None,
 ) -> tuple[str, str]:
     """
     和理論に基づく台本生成用のシステムプロンプトとユーザープロンプトを構築する。
@@ -256,6 +257,17 @@ JSON内の改行は \\n で表現してください。
             "以下はナレッジベースから取得した参考情報です。"
             "台本のコンテンツに活用してください。\n\n"
             f"{rag_context}\n"
+        )
+
+    # --- コメント分析インサイト（視聴者ニーズ） ---
+    if comment_insights:
+        user_prompt_parts.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
+        user_prompt_parts.append("■ 視聴者コメント分析（満たされないニーズ）")
+        user_prompt_parts.append("━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+        user_prompt_parts.append(
+            "以下はライバル動画のコメント分析から抽出された視聴者ニーズです。"
+            "これらのニーズを台本に盛り込み、視聴者が「この動画は自分のためだ」と感じる内容にしてください。\n\n"
+            f"{comment_insights}\n"
         )
 
     # --- 追加コンテキスト ---
