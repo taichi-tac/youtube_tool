@@ -68,7 +68,13 @@ export default function PlanningPage() {
           <div className="space-y-4">
             {ideas.map((idea, i) => (
               <IdeaCard key={i} idea={idea} rank={i + 1} onUse={() => {
-                router.push(`/scripts/new?title=${encodeURIComponent(idea.title)}&target=${encodeURIComponent(idea.target_viewer)}&keyword=${encodeURIComponent(idea.keyword)}`);
+                const params = new URLSearchParams({
+                  title: idea.title,
+                  target: idea.target_viewer,
+                  keyword: idea.keyword,
+                  promise: idea.reason,
+                });
+                router.push(`/scripts/new?${params.toString()}`);
               }} />
             ))}
           </div>

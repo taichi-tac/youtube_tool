@@ -5,7 +5,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import { useScriptGeneration } from "@/hooks/useScriptGeneration";
 import { useKeywordSearch } from "@/hooks/useKeywordSearch";
 import { useKnowledgeSearch } from "@/hooks/useKnowledgeSearch";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { WizardStep, ScriptGenerateRequest } from "@/types/script";
 
@@ -18,6 +18,7 @@ const steps: { step: WizardStep; label: string }[] = [
 
 export default function ScriptNewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     scriptId,
     streamedText,
@@ -60,6 +61,32 @@ export default function ScriptNewPage() {
 
   // Step 3: knowledge
   const [useRag, setUseRag] = useState(false);
+
+  // URLパラメータから自動入力（企画提案・一気通貫からの遷移）
+  useEffect(() => {
+    const paramTitle = searchParams.get("title");
+    const paramTarget = searchParams.get("target");
+    const paramProblem = searchParams.get("problem");
+    const paramPromise = searchParams.get("promise");
+    const paramUniqueness = searchParams.get("uniqueness");
+    const paramKeyword = searchParams.get("keyword");
+
+    if (paramTitle) setTitle(paramTitle);
+    if (paramTarget) setTargetViewer(paramTarget);
+    if (paramProblem) setViewerProblem(paramProblem);
+    if (paramPromise) setPromise(paramPromise);
+    if (paramUniqueness) setUniqueness(paramUniqueness);
+    if (paramKeyword) {
+      setSelectedKeywordText(paramKeyword);
+      setSeedInput(paramKeyword);
+    }
+
+    // パラメータがあればSTEP 2（外側設計）から開始
+    if (paramTitle || paramTarget) {
+      setCurrentStep(2);
+      setUseRag(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchKeywords();
