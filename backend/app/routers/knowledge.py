@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, use_supabase_sdk
@@ -85,3 +86,40 @@ async def search_knowledge(
         db=db,
     )
     return results
+
+
+# === 独自理論/ナレッジ追加 ===
+
+class KnowledgeAddRequest(BaseModel):
+    title: str
+    content: str
+    source_type: str = "user_upload"  # user_upload / wa_theory / market_analysis
+
+
+@router.post("/{project_id}/add-theory")
+async def add_custom_knowledge(
+    project_id: uuid.UUID,
+    body: KnowledgeAddRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession | None = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    ユーザーの独自理論・ナレッジをRAGに追加する。
+    テキスト入力 → チャンク化 → ベクトル化 → DB保存。
+    """
+    if not body.content.strip():
+        raise HTTPException(status_code=400, detail="内容を入力してください")
+
+    chunk_count = await ingest_document(
+        project_id=project_id,
+        filename=f"theory_{body.title}.md",
+        content=f"# {body.title}\n\n{body.content}",
+        source_type=body.source_type,
+        db=db,
+    )
+
+    return {
+        "message": f"ナレッジを追加しました（{chunk_count}チャンク）",
+        "title": body.title,
+        "chunk_count": chunk_count,
+    }

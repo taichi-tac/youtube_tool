@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import keywords, knowledge, pipeline, planning, projects, scripts, thumbnails, theories, videos
+from app.routers import content, keywords, knowledge, pipeline, planning, projects, scripts, thumbnails, theories, videos
 from app.utils.cache import close_redis
 
 
@@ -71,6 +71,7 @@ app.include_router(thumbnails.router, prefix=API_V1_PREFIX)
 app.include_router(theories.router, prefix=API_V1_PREFIX)
 app.include_router(planning.router, prefix=API_V1_PREFIX)
 app.include_router(pipeline.router, prefix=API_V1_PREFIX)
+app.include_router(content.router, prefix=API_V1_PREFIX)
 
 
 @app.get("/health")

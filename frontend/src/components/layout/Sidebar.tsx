@@ -12,6 +12,7 @@ const navigation = [
   { name: "動画一覧", href: "/videos", icon: "🎬" },
   { name: "台本一覧", href: "/scripts", icon: "📝" },
   { name: "台本生成", href: "/scripts/new", icon: "✨" },
+  { name: "コンテンツ工房", href: "/content", icon: "🔧" },
   { name: "ナレッジ", href: "/knowledge", icon: "📚" },
   { name: "サムネ分析", href: "/thumbnails", icon: "🖼" },
   { name: "理論一覧", href: "/theories", icon: "💡" },
