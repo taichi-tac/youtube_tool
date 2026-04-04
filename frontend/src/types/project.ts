@@ -10,6 +10,10 @@ export interface Project {
   concept: string | null;
   center_pin: string | null;
   settings: Record<string, unknown>;
+  benchmark_channels: string[] | null;
+  strengths: string | null;
+  content_style: string | null;
+  onboarding_completed: boolean;
   created_at: string;
   updated_at: string;
 }

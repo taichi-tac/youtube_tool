@@ -198,3 +198,56 @@ async def delete_project(
 
     await db.delete(project)
     await db.flush()
+
+
+# === プロファイル エンドポイント ===
+
+from pydantic import BaseModel
+
+class ProfileUpdate(BaseModel):
+    genre: str | None = None
+    target_audience: str | None = None
+    concept: str | None = None
+    center_pin: str | None = None
+    benchmark_channels: list[str] | None = None
+    strengths: str | None = None
+    content_style: str | None = None
+
+
+@router.get("/{project_id}/profile")
+async def get_profile(
+    project_id: uuid.UUID,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """プロジェクトのプロファイル情報を取得"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        result = sb.table("projects").select(
+            "genre,target_audience,concept,center_pin,benchmark_channels,strengths,content_style,onboarding_completed"
+        ).eq("id", str(project_id)).eq("user_id", user["user_id"]).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+        return result.data[0]
+    else:
+        raise HTTPException(status_code=501, detail="SQLAlchemy未対応")
+
+
+@router.patch("/{project_id}/profile")
+async def update_profile(
+    project_id: uuid.UUID,
+    body: ProfileUpdate,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """プロファイルを更新する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        update_data = body.model_dump(exclude_unset=True)
+        update_data["onboarding_completed"] = True
+        result = sb.table("projects").update(update_data).eq(
+            "id", str(project_id)
+        ).eq("user_id", user["user_id"]).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+        return result.data[0]
+    else:
+        raise HTTPException(status_code=501, detail="SQLAlchemy未対応")
