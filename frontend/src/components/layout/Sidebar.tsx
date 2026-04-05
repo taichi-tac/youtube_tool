@@ -6,16 +6,16 @@ import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "ダッシュボード", href: "/", icon: "📊" },
-  { name: "企画提案", href: "/planning", icon: "🎯" },
-  { name: "一気通貫", href: "/pipeline", icon: "🚀" },
-  { name: "キーワード検索", href: "/keywords", icon: "🔍" },
-  { name: "動画一覧", href: "/videos", icon: "🎬" },
+  { name: "STEP1 コンセプト設定", href: "/onboarding", icon: "🎨" },
+  { name: "STEP2 リサーチ", href: "/pipeline", icon: "🔍" },
+  { name: "STEP3 企画提案", href: "/planning", icon: "🎯" },
+  { name: "STEP4 台本生成", href: "/scripts/new", icon: "✨" },
   { name: "台本一覧", href: "/scripts", icon: "📝" },
-  { name: "台本生成", href: "/scripts/new", icon: "✨" },
   { name: "コンテンツ工房", href: "/content", icon: "🔧" },
+  { name: "動画一覧", href: "/videos", icon: "🎬" },
+  { name: "キーワード検索", href: "/keywords", icon: "🔎" },
   { name: "ナレッジ", href: "/knowledge", icon: "📚" },
   { name: "サムネ分析", href: "/thumbnails", icon: "🖼" },
-  { name: "プロフィール設定", href: "/onboarding", icon: "⚙️" },
   { name: "プロジェクト", href: "/projects", icon: "📁" },
 ];
 
