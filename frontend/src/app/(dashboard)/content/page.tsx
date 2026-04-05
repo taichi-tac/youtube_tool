@@ -1,17 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import PageHeader from "@/components/layout/PageHeader";
 import { apiClient, getProjectId } from "@/lib/api-client";
 
 type Tab = "timestamps" | "community" | "shorts" | "media" | "theory";
 
+interface ScriptOption {
+  id: string;
+  title: string;
+  status: string;
+  word_count: number | null;
+  created_at: string;
+}
+
 export default function ContentPage() {
   const [tab, setTab] = useState<Tab>("timestamps");
   const [scriptId, setScriptId] = useState("");
+  const [scripts, setScripts] = useState<ScriptOption[]>([]);
+  const [scriptsLoading, setScriptsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 台本一覧を読み込み
+  useEffect(() => {
+    async function loadScripts() {
+      try {
+        const pid = await getProjectId();
+        const data = await apiClient.get<ScriptOption[]>(`/api/v1/scripts/${pid}`);
+        setScripts(data.filter((s) => s.status === "completed"));
+        if (data.length > 0 && !scriptId) {
+          const completed = data.filter((s) => s.status === "completed");
+          if (completed.length > 0) setScriptId(completed[0].id);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setScriptsLoading(false);
+      }
+    }
+    loadScripts();
+  }, []);
 
   // Theory inputs
   const [theoryTitle, setTheoryTitle] = useState("");
@@ -97,14 +127,24 @@ export default function ContentPage() {
       <div className="mb-6 rounded-xl border bg-white p-6">
         {tab !== "theory" ? (
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">台本ID</label>
-            <input
-              type="text"
-              value={scriptId}
-              onChange={(e) => setScriptId(e.target.value)}
-              placeholder="台本のIDを入力（台本一覧からコピー）"
-              className="mb-4 w-full rounded-lg border px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
-            />
+            <label className="mb-2 block text-sm font-medium text-gray-700">台本を選択</label>
+            {scriptsLoading ? (
+              <p className="mb-4 text-sm text-gray-400">台本を読み込み中...</p>
+            ) : scripts.length === 0 ? (
+              <p className="mb-4 text-sm text-gray-400">完了済みの台本がありません。先に台本を生成してください。</p>
+            ) : (
+              <select
+                value={scriptId}
+                onChange={(e) => setScriptId(e.target.value)}
+                className="mb-4 w-full rounded-lg border px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none bg-white"
+              >
+                {scripts.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title} ({s.word_count?.toLocaleString() || "?"}文字)
+                  </option>
+                ))}
+              </select>
+            )}
             {tab === "media" && (
               <div className="mb-4">
                 <label className="mb-2 block text-sm font-medium text-gray-700">出力形式</label>
