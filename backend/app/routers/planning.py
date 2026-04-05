@@ -50,6 +50,9 @@ async def generate_ideas(
         count=body.count,
     )
 
+    # 生成した企画をDBに保存
+    _save_ideas(project_id, ideas)
+
     return ideas
 
 
@@ -78,7 +81,69 @@ async def generate_more_ideas(
         exclude_keywords=body.exclude_keywords,
     )
 
+    _save_ideas(project_id, ideas)
+
     return ideas
+
+
+@router.get("/{project_id}/history")
+async def get_idea_history(
+    project_id: uuid.UUID,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> list[dict[str, Any]]:
+    """過去に生成した企画の履歴を取得する"""
+    if use_supabase_sdk():
+        sb = get_supabase()
+        result = sb.table("theories").select("*").eq(
+            "project_id", str(project_id)
+        ).eq("category", "planning").order(
+            "created_at", desc=True
+        ).limit(50).execute()
+
+        # theoriesテーブルのデータを企画形式に変換
+        ideas = []
+        for t in result.data:
+            evidence = t.get("evidence") or {}
+            ideas.append({
+                "id": t["id"],
+                "title": t["title"],
+                "target_viewer": evidence.get("target_viewer", ""),
+                "keyword": evidence.get("keyword", ""),
+                "reason": t.get("body", ""),
+                "demand_score": float(evidence.get("demand_score", 5)),
+                "niche_score": float(evidence.get("niche_score", 5)),
+                "created_at": t["created_at"],
+            })
+        return ideas
+    raise HTTPException(status_code=501, detail="SQLAlchemy未対応")
+
+
+def _save_ideas(project_id: uuid.UUID, ideas: list[dict[str, Any]]) -> None:
+    """企画をtheoriesテーブルに保存する（category='planning'）"""
+    if not use_supabase_sdk() or not ideas:
+        return
+    sb = get_supabase()
+    rows = []
+    for idea in ideas:
+        rows.append({
+            "project_id": str(project_id),
+            "title": idea.get("title", ""),
+            "category": "planning",
+            "body": idea.get("reason", ""),
+            "source_type": "ai_extracted",
+            "evidence": {
+                "target_viewer": idea.get("target_viewer", ""),
+                "keyword": idea.get("keyword", ""),
+                "demand_score": idea.get("demand_score", 5),
+                "niche_score": idea.get("niche_score", 5),
+            },
+            "confidence": round((idea.get("demand_score", 5) * idea.get("niche_score", 5)) / 100, 2),
+            "is_active": True,
+        })
+    try:
+        sb.table("theories").insert(rows).execute()
+    except Exception:
+        pass  # 保存失敗しても企画生成自体は止めない
 
 
 def _get_profile(project_id: uuid.UUID, user: dict[str, Any]) -> dict[str, Any]:

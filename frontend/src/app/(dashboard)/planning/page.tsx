@@ -1,20 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import PageHeader from "@/components/layout/PageHeader";
 import { usePlanning } from "@/hooks/usePlanning";
 import { useRouter } from "next/navigation";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import type { PlanningIdea } from "@/types/planning";
 
 export default function PlanningPage() {
   const router = useRouter();
   const { ideas, loading, error, generateIdeas, generateMore } = usePlanning();
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [tab, setTab] = useState<"generate" | "history">("generate");
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const handleGenerate = async () => {
     await generateIdeas(10);
     setHasGenerated(true);
   };
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const pid = await getProjectId();
+      const data = await apiClient.get<any[]>(`/api/v1/planning/${pid}/history`);
+      setHistory(data);
+    } catch {
+      // ignore
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "history") loadHistory();
+  }, [tab]);
 
   return (
     <div>
@@ -24,7 +45,58 @@ export default function PlanningPage() {
         <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</div>
       )}
 
-      {!hasGenerated ? (
+      {/* タブ切替 */}
+      <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1">
+        <button
+          onClick={() => setTab("generate")}
+          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            tab === "generate" ? "bg-white text-blue-700 shadow-sm" : "text-gray-600"
+          }`}
+        >
+          🎰 新規生成
+        </button>
+        <button
+          onClick={() => setTab("history")}
+          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            tab === "history" ? "bg-white text-blue-700 shadow-sm" : "text-gray-600"
+          }`}
+        >
+          📋 過去の企画
+        </button>
+      </div>
+
+      {/* 過去の企画タブ */}
+      {tab === "history" && (
+        <div>
+          {historyLoading ? (
+            <div className="py-12 text-center text-sm text-gray-500">読み込み中...</div>
+          ) : history.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center">
+              <p className="text-sm text-gray-400">まだ企画がありません</p>
+              <button onClick={() => setTab("generate")} className="mt-2 text-sm text-blue-600 hover:underline">
+                企画を生成する
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-gray-900">過去の企画 ({history.length}件)</h2>
+              {history.map((idea, i) => (
+                <IdeaCard key={idea.id || i} idea={idea} rank={i + 1} onUse={() => {
+                  const params = new URLSearchParams({
+                    title: idea.title,
+                    target: idea.target_viewer || "",
+                    keyword: idea.keyword || "",
+                    promise: idea.reason || "",
+                  });
+                  router.push(`/scripts/new?${params.toString()}`);
+                }} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "generate" && !hasGenerated ? (
         <div className="flex flex-col items-center justify-center py-16">
           <div className="mb-8 text-center">
             <div className="mb-4 text-6xl">🎰</div>
@@ -52,7 +124,7 @@ export default function PlanningPage() {
             )}
           </button>
         </div>
-      ) : (
+      ) : tab === "generate" ? (
         <div>
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">提案企画 ({ideas.length}件)</h2>
@@ -79,7 +151,7 @@ export default function PlanningPage() {
             ))}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
