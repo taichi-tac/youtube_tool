@@ -342,7 +342,7 @@ export default function ScriptNewPage() {
                     <input
                       type="range"
                       min={3}
-                      max={60}
+                      max={180}
                       step={1}
                       value={duration}
                       onChange={(e) => setDuration(Number(e.target.value))}
