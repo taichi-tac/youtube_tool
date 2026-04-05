@@ -15,7 +15,6 @@ const navigation = [
   { name: "コンテンツ工房", href: "/content", icon: "🔧" },
   { name: "ナレッジ", href: "/knowledge", icon: "📚" },
   { name: "サムネ分析", href: "/thumbnails", icon: "🖼" },
-  { name: "理論一覧", href: "/theories", icon: "💡" },
   { name: "プロフィール設定", href: "/onboarding", icon: "⚙️" },
   { name: "プロジェクト", href: "/projects", icon: "📁" },
 ];
