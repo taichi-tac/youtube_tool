@@ -9,9 +9,12 @@ export function useScriptGeneration() {
   const [streamedText, setStreamedText] = useState("");
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [charCount, setCharCount] = useState(0);
+  const [targetChars, setTargetChars] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const totalCharsRef = useRef(0);
 
   /**
    * POST /api/v1/scripts/{project_id}/generate でSSEストリーミング生成。
@@ -21,7 +24,11 @@ export function useScriptGeneration() {
    * - event: done   → { script_id, word_count }
    * - event: error  → { error }
    */
-  const generate = useCallback(async (request: ScriptGenerateRequest) => {
+  const generate = useCallback(async (request: ScriptGenerateRequest, durationMinutes: number = 15) => {
+    const target = durationMinutes * 300;
+    setTargetChars(target);
+    totalCharsRef.current = 0;
+    setCharCount(0);
     setGenerating(true);
     setProgress(0);
     setError(null);
@@ -56,9 +63,14 @@ export function useScriptGeneration() {
 
             case "chunk":
               chunkCount++;
+              totalCharsRef.current += (parsed.text || "").length;
               setStreamedText((prev) => prev + parsed.text);
-              // 進捗を5%〜90%の範囲で推定
-              setProgress(Math.min(90, 5 + chunkCount * 2));
+              setCharCount(totalCharsRef.current);
+              // 実測ベース進捗: 現在文字数 / 目標文字数
+              const pct = target > 0
+                ? Math.min(99, Math.round((totalCharsRef.current / target) * 100))
+                : Math.min(99, 5 + chunkCount * 2);
+              setProgress(pct);
               break;
 
             case "done":
@@ -107,6 +119,8 @@ export function useScriptGeneration() {
     streamedText,
     generating,
     progress,
+    charCount,
+    targetChars,
     error,
     done,
     generate,

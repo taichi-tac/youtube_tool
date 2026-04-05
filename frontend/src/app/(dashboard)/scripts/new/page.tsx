@@ -24,6 +24,8 @@ export default function ScriptNewPage() {
     streamedText,
     generating,
     progress,
+    charCount,
+    targetChars,
     error: genError,
     done,
     generate,
@@ -129,7 +131,7 @@ export default function ScriptNewPage() {
       additional_context: durationContext,
       use_rag: useRag,
     };
-    generate(request);
+    generate(request, duration);
   };
 
   const handleNext = () => {
@@ -452,8 +454,8 @@ export default function ScriptNewPage() {
               {/* プログレスバー */}
               {generating && (
                 <div className="mb-4">
-                  <div className="mb-2 flex justify-between text-sm text-gray-600">
-                    <span>生成中...</span>
+                  <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
+                    <span>生成中... {charCount.toLocaleString()} / {targetChars.toLocaleString()} 文字</span>
                     <span>{progress}%</span>
                   </div>
                   <div className="h-3 w-full rounded-full bg-gray-200">
