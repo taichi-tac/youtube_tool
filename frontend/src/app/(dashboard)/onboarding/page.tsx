@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient, getProjectId } from "@/lib/api-client";
 
@@ -16,6 +16,31 @@ export default function OnboardingPage() {
   const [benchmarks, setBenchmarks] = useState<string[]>([""]);
   const [strengths, setStrengths] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // 既存プロファイルを読み込み
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const pid = await getProjectId();
+        const profile = await apiClient.get<any>(`/api/v1/projects/${pid}/profile`);
+        if (profile) {
+          if (profile.genre) setGenre(profile.genre);
+          if (profile.target_audience) setTargetAudience(profile.target_audience);
+          if (profile.content_style) setContentStyle(profile.content_style);
+          if (profile.benchmark_channels && profile.benchmark_channels.length > 0) {
+            setBenchmarks(profile.benchmark_channels);
+          }
+          if (profile.strengths) setStrengths(profile.strengths);
+        }
+      } catch {
+        // 新規ユーザーの場合はエラーを無視
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProfile();
+  }, []);
 
   const addBenchmark = () => {
     if (benchmarks.length < 10) setBenchmarks([...benchmarks, ""]);
@@ -49,6 +74,10 @@ export default function OnboardingPage() {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    return <div className="py-12 text-center text-sm text-gray-500">プロファイル読み込み中...</div>;
+  }
 
   return (
     <div className="mx-auto max-w-2xl py-8">
