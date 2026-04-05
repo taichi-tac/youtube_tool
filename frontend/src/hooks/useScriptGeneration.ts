@@ -48,6 +48,8 @@ export function useScriptGeneration() {
       );
 
       let chunkCount = 0;
+      let receivedScriptId: string | null = null;
+      let receivedDone = false;
 
       for await (const { event, data } of apiClient.parseSSE(response)) {
         if (controller.signal.aborted) break;
@@ -57,6 +59,7 @@ export function useScriptGeneration() {
 
           switch (event) {
             case "start":
+              receivedScriptId = parsed.script_id;
               setScriptId(parsed.script_id);
               setProgress(5);
               break;
@@ -66,7 +69,6 @@ export function useScriptGeneration() {
               totalCharsRef.current += (parsed.text || "").length;
               setStreamedText((prev) => prev + parsed.text);
               setCharCount(totalCharsRef.current);
-              // 実測ベース進捗: 現在文字数 / 目標文字数
               const pct = target > 0
                 ? Math.min(99, Math.round((totalCharsRef.current / target) * 100))
                 : Math.min(99, 5 + chunkCount * 2);
@@ -74,6 +76,8 @@ export function useScriptGeneration() {
               break;
 
             case "done":
+              receivedScriptId = parsed.script_id;
+              receivedDone = true;
               setScriptId(parsed.script_id);
               setProgress(100);
               setDone(true);
@@ -86,16 +90,17 @@ export function useScriptGeneration() {
               break;
           }
         } catch {
-          // JSONパースエラーは無視（空行など）
+          // JSONパースエラーは無視
         }
       }
 
-      // ストリーム終了後、生成完了していなければ完了扱い
-      if (!controller.signal.aborted) {
+      // ストリーム終了後、doneイベントが来なかった場合も完了扱い
+      if (!controller.signal.aborted && !receivedDone) {
+        setProgress(100);
+        setDone(true);
         setGenerating(false);
-        if (!done) {
-          setProgress(100);
-          setDone(true);
+        if (receivedScriptId) {
+          setScriptId(receivedScriptId);
         }
       }
     } catch (err) {
