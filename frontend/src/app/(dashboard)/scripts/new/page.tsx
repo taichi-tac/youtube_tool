@@ -95,6 +95,16 @@ export default function ScriptNewPage() {
     fetchKeywords();
   }, [fetchKeywords]);
 
+  // 台本生成完了時に自動的に編集画面へ遷移
+  useEffect(() => {
+    if (done && scriptId) {
+      const timer = setTimeout(() => {
+        router.push(`/scripts/${scriptId}`);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [done, scriptId, router]);
+
   // Step 3 auto-search when entering step 3
   useEffect(() => {
     if (currentStep === 3 && (title || selectedKeywordText)) {
@@ -482,17 +492,12 @@ export default function ScriptNewPage() {
               {/* 完了メッセージ */}
               {done && scriptId && (
                 <div className="mb-4 rounded-lg bg-green-50 p-4 text-sm text-green-700">
-                  台本の生成が完了しました!{" "}
-                  <button
-                    onClick={() => router.push(`/scripts/${scriptId}`)}
-                    className="font-medium underline hover:text-green-900"
-                  >
-                    台本を編集する
-                  </button>
+                  台本の生成が完了しました! 編集画面に移動します...
                 </div>
               )}
 
               {/* 生成ボタン */}
+              {!done && (
               <div className="flex gap-3">
                 <button
                   onClick={handleGenerate}
@@ -510,6 +515,7 @@ export default function ScriptNewPage() {
                   </button>
                 )}
               </div>
+              )}
             </div>
           )}
 
