@@ -58,6 +58,7 @@ export default function ScriptNewPage() {
   const [viewerProblem, setViewerProblem] = useState("");
   const [promise, setPromise] = useState("");
   const [uniqueness, setUniqueness] = useState("");
+  const [duration, setDuration] = useState(15); // 尺（分）
 
   // Step 3: knowledge
   const [useRag, setUseRag] = useState(false);
@@ -117,6 +118,7 @@ export default function ScriptNewPage() {
   };
 
   const handleGenerate = () => {
+    const durationContext = `動画の尺は約${duration}分（約${duration * 300}文字）を想定してください。`;
     const request: ScriptGenerateRequest = {
       title: title || selectedKeywordText || "無題の台本",
       keyword_id: selectedKeywordId || undefined,
@@ -124,7 +126,7 @@ export default function ScriptNewPage() {
       viewer_problem: viewerProblem || undefined,
       promise: promise || undefined,
       uniqueness: uniqueness || undefined,
-      additional_context: undefined,
+      additional_context: durationContext,
       use_rag: useRag,
     };
     generate(request);
@@ -332,6 +334,26 @@ export default function ScriptNewPage() {
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    動画の尺
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min={3}
+                      max={60}
+                      step={1}
+                      value={duration}
+                      onChange={(e) => setDuration(Number(e.target.value))}
+                      className="flex-1"
+                    />
+                    <span className="w-20 text-right text-lg font-bold text-blue-600">{duration}分</span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-400">
+                    約{(duration * 300).toLocaleString()}文字の台本を生成します
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -415,6 +437,10 @@ export default function ScriptNewPage() {
                   <p>
                     <span className="font-medium">独自性:</span>{" "}
                     {uniqueness || "未設定"}
+                  </p>
+                  <p>
+                    <span className="font-medium">尺:</span>{" "}
+                    {duration}分（約{(duration * 300).toLocaleString()}文字）
                   </p>
                   <p>
                     <span className="font-medium">RAG:</span>{" "}
