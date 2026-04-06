@@ -22,22 +22,45 @@ async def analyze_url(url: str) -> dict[str, Any]:
     """
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-    # URLからコンテンツを取得
+    import re
+
+    # YouTube URLかどうか判定
+    yt_match = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
+
     content_text = ""
-    try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as http:
-            resp = await http.get(url)
-            # HTMLからテキスト抽出（簡易）
-            html = resp.text
-            # タグ除去
-            import re
-            content_text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL)
-            content_text = re.sub(r'<style[^>]*>.*?</style>', '', content_text, flags=re.DOTALL)
-            content_text = re.sub(r'<[^>]+>', ' ', content_text)
-            content_text = re.sub(r'\s+', ' ', content_text).strip()[:5000]
-    except Exception as e:
-        logger.warning(f"URL取得エラー: {e}")
-        content_text = f"URL: {url} (取得失敗)"
+    if yt_match:
+        # YouTube動画の場合: YouTube Data APIで詳細取得
+        video_id = yt_match.group(1)
+        try:
+            from app.services.youtube_service import get_video_details
+            details = await get_video_details([video_id])
+            if details:
+                d = details[0]
+                content_text = (
+                    f"動画タイトル: {d.get('title', '')}\n"
+                    f"チャンネル: {d.get('channel_title', '')}\n"
+                    f"再生数: {d.get('view_count', 0)}\n"
+                    f"いいね: {d.get('like_count', 0)}\n"
+                    f"説明文: {d.get('description', '')[:2000]}\n"
+                )
+            else:
+                content_text = f"YouTube動画ID: {video_id} (詳細取得失敗)"
+        except Exception as e:
+            logger.warning(f"YouTube API取得エラー: {e}")
+            content_text = f"YouTube動画URL: {url}"
+    else:
+        # 通常のURL: HTMLスクレイピング
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as http:
+                resp = await http.get(url)
+                html = resp.text
+                content_text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL)
+                content_text = re.sub(r'<style[^>]*>.*?</style>', '', content_text, flags=re.DOTALL)
+                content_text = re.sub(r'<[^>]+>', ' ', content_text)
+                content_text = re.sub(r'\s+', ' ', content_text).strip()[:5000]
+        except Exception as e:
+            logger.warning(f"URL取得エラー: {e}")
+            content_text = f"URL: {url} (取得失敗)"
 
     prompt = f"""以下のURLのコンテンツを分析し、YouTube チャンネルのコンセプト設定に必要な情報を抽出してください。
 
