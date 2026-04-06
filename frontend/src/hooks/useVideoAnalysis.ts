@@ -35,7 +35,7 @@ export function useVideoAnalysis() {
   }, []);
 
   /** YouTube動画を検索してDBに保存 */
-  const searchVideos = useCallback(async (query: string, maxResults = 10) => {
+  const searchVideos = useCallback(async (query: string, maxResults = 50) => {
     setLoading(true);
     setError(null);
     try {

@@ -212,6 +212,7 @@ class ProfileUpdate(BaseModel):
     benchmark_channels: list[str] | None = None
     strengths: str | None = None
     content_style: str | None = None
+    youtube_api_key: str | None = None
 
 
 @router.get("/{project_id}/profile")
@@ -223,7 +224,7 @@ async def get_profile(
     if use_supabase_sdk():
         sb = get_supabase()
         result = sb.table("projects").select(
-            "genre,target_audience,concept,center_pin,benchmark_channels,strengths,content_style,onboarding_completed"
+            "genre,target_audience,concept,center_pin,benchmark_channels,strengths,content_style,onboarding_completed,youtube_api_key"
         ).eq("id", str(project_id)).eq("user_id", user["user_id"]).execute()
         if not result.data:
             raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")

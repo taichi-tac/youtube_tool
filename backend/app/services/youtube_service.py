@@ -13,9 +13,10 @@ from app.core.config import settings
 from app.core.quota_manager import quota_manager
 
 
-def _get_youtube_client() -> Any:
-    """YouTube Data API v3クライアントを生成する"""
-    return build("youtube", "v3", developerKey=settings.YOUTUBE_API_KEY)
+def _get_youtube_client(api_key: str | None = None) -> Any:
+    """YouTube Data API v3クライアントを生成する。カスタムAPIキー対応。"""
+    key = api_key or settings.YOUTUBE_API_KEY
+    return build("youtube", "v3", developerKey=key)
 
 
 def _iso8601_duration_to_seconds(duration: Optional[str]) -> Optional[int]:
@@ -44,27 +45,27 @@ def _iso8601_duration_to_seconds(duration: Optional[str]) -> Optional[int]:
 
 async def search_videos(
     query: str,
-    max_results: int = 10,
+    max_results: int = 50,
     order: str = "relevance",
     region_code: str = "JP",
+    api_key: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     YouTube動画を検索する。
 
     Args:
         query: 検索クエリ
-        max_results: 最大取得件数
+        max_results: 最大取得件数（最大50）
         order: 並び順（relevance, date, viewCount, rating）
         region_code: リージョンコード
-
-    Returns:
-        検索結果のリスト
+        api_key: ユーザー独自のAPIキー（省略時はシステムキー）
     """
-    # クォータチェック
-    if not await quota_manager.consume("search.list"):
-        raise RuntimeError("YouTube APIの1日あたりのクォータ上限に達しました")
+    # ユーザーAPIキーがある場合はクォータチェックをスキップ
+    if not api_key:
+        if not await quota_manager.consume("search.list"):
+            raise RuntimeError("YouTube APIの1日あたりのクォータ上限に達しました")
 
-    youtube = _get_youtube_client()
+    youtube = _get_youtube_client(api_key)
     request = youtube.search().list(
         q=query,
         part="snippet",
@@ -91,24 +92,16 @@ async def search_videos(
     return results
 
 
-async def get_video_details(video_ids: list[str]) -> list[dict[str, Any]]:
-    """
-    動画IDリストから詳細情報（統計・コンテンツ詳細）を取得する。
-
-    Args:
-        video_ids: YouTube動画IDのリスト
-
-    Returns:
-        動画詳細情報のリスト
-    """
+async def get_video_details(video_ids: list[str], api_key: str | None = None) -> list[dict[str, Any]]:
+    """動画IDリストから詳細情報を取得する。"""
     if not video_ids:
         return []
 
-    # クォータ消費（videos.listは1ユニット/リクエスト）
-    if not await quota_manager.consume("videos.list"):
-        raise RuntimeError("YouTube APIの1日あたりのクォータ上限に達しました")
+    if not api_key:
+        if not await quota_manager.consume("videos.list"):
+            raise RuntimeError("YouTube APIの1日あたりのクォータ上限に達しました")
 
-    youtube = _get_youtube_client()
+    youtube = _get_youtube_client(api_key)
     request = youtube.videos().list(
         id=",".join(video_ids),
         part="snippet,statistics,contentDetails",

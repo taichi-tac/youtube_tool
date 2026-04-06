@@ -62,11 +62,20 @@ async def search_and_save_videos(
     db: AsyncSession = Depends(get_db),
 ):
     """YouTube動画を検索してDBに保存する"""
-    # YouTube検索実行
+    # プロジェクトのカスタムAPIキーを取得
+    user_api_key = None
+    if use_supabase_sdk():
+        sb = get_supabase()
+        proj = sb.table("projects").select("youtube_api_key").eq("id", str(project_id)).execute()
+        if proj.data and proj.data[0].get("youtube_api_key"):
+            user_api_key = proj.data[0]["youtube_api_key"]
+
+    # YouTube検索実行（最大50件）
     search_results = await search_videos(
         query=body.query,
-        max_results=body.max_results,
+        max_results=min(body.max_results, 50),
         order=body.order,
+        api_key=user_api_key,
     )
 
     if not search_results:
@@ -74,7 +83,7 @@ async def search_and_save_videos(
 
     # 動画IDリストから詳細情報を取得
     video_ids = [r["youtube_video_id"] for r in search_results]
-    details = await get_video_details(video_ids)
+    details = await get_video_details(video_ids, api_key=user_api_key)
     detail_map: dict[str, dict[str, Any]] = {d["youtube_video_id"]: d for d in details}
 
     now = datetime.now(timezone.utc)
