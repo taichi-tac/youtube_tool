@@ -278,50 +278,58 @@ async def autofill_model(
 
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-    prompt = f"""以下の情報を分析し、YouTubeチャンネル運営者のナレッジを3カテゴリに分類して抽出してください。
+    prompt = f"""以下のYouTubeチャンネルの情報（動画メタデータ＋字幕テキスト）を分析し、チャンネル運営者のナレッジを抽出してください。
+
+【最重要】字幕テキストが含まれている場合、必ず以下を分析してください：
+- 一人称は何を使っているか（僕、俺、私、自分 等）
+- 語尾のパターン（〜ですね、〜なんですよ、〜じゃん 等）
+- 話し方のフランクさ（丁寧語中心か、タメ口中心か、その配分）
+- よく使う表現パターン（断定する、質問を投げかける、数字を多用する 等）
+- 原体験や過去の苦労に関するエピソードがあれば抽出
 
 ## 入力情報
-{input_text[:4000]}
+{input_text[:8000]}
 
 ## 抽出してほしい項目（JSON形式）
 {{
   "personal_knowledge": {{
-    "achievements": "数値ベースの実績",
-    "profile": "プロフィール・経歴・肩書",
-    "origin_story": "原体験ストーリー（転機・苦労・逆転劇）",
-    "values": "価値観・人生哲学・信念",
-    "vision": "ビジョン・目標",
-    "strengths": "強み・ポジショントーク",
-    "first_person": "一人称・基本の口調",
-    "tone_rules": "語尾・言い回しルール",
-    "casual_level": "フランクさレベル",
-    "expression_patterns": "推奨表現パターン",
-    "decoration_rules": "装飾記号の使い方",
-    "ng_expressions": "避けるべき表現"
+    "achievements": "数値ベースの実績（登録者数、再生数、売上、受講生数等）",
+    "profile": "プロフィール・経歴・肩書・年齢（推測でもOK）",
+    "origin_story": "原体験ストーリー（字幕から過去の苦労・転機・逆転劇を抽出）",
+    "values": "価値観・人生哲学・信念（字幕から読み取れる信条）",
+    "vision": "ビジョン・目標（字幕やプロフィールから推測）",
+    "strengths": "強み・なぜこの人から学ぶべきか",
+    "first_person": "字幕から特定した一人称（例: 僕、俺、私）と基本の口調",
+    "tone_rules": "字幕から抽出した語尾パターン（例: 〜ですね、〜なんですよ、〜じゃないですか）を5つ以上列挙",
+    "casual_level": "フランクさレベル（例: 7:3でカジュアル寄り）丁寧語とタメ口の割合を判定",
+    "expression_patterns": "字幕から抽出した特徴的な表現パターン（断定、対比、数字活用、例え話、質問形式等）",
+    "decoration_rules": "概要欄やタイトルで使われている装飾記号・絵文字パターン",
+    "ng_expressions": "この人が使わなさそうな表現（推測）"
   }},
   "content_knowledge": {{
-    "popular_keywords": "人気キーワード・共通言語",
-    "target_info": "発信ターゲット情報",
-    "youtube_templates": "動画構成の特徴"
+    "popular_keywords": "このジャンルで頻出するキーワード・共通言語",
+    "target_info": "発信ターゲット（誰に向けているか）",
+    "youtube_templates": "動画の構成パターン（冒頭の入り方、展開、締め方）"
   }},
   "product_knowledge": {{
-    "product_overview": "商品概要",
+    "product_overview": "商品・サービス概要",
     "core_concept": "コアコンセプト・USP",
     "curriculum": "カリキュラム構成",
-    "support_community": "サポート体制",
-    "benefits": "特典",
-    "pricing": "料金・保証",
-    "appeal_keywords": "訴求キーワード",
-    "target_attributes": "ターゲット属性",
-    "target_problems": "ターゲットの悩み",
-    "ideal_future": "理想の未来",
-    "worst_future": "最悪の未来",
-    "required_mindset": "必須マインドセット",
+    "support_community": "サポート体制・コミュニティ",
+    "benefits": "特典一覧",
+    "pricing": "料金・保証制度",
+    "appeal_keywords": "訴求キーワード一覧",
+    "target_attributes": "ターゲット属性（職業・状況）",
+    "target_problems": "ターゲットの具体的な悩み",
+    "ideal_future": "理想の未来（この商品で得られる状態）",
+    "worst_future": "最悪の未来（買わない場合の恐怖）",
+    "required_mindset": "求める受講者像",
     "client_results": "クライアント成果事例"
   }}
 }}
 
-情報が不明な項目は空文字にしてください。JSONのみ返してください。"""
+【重要】字幕テキストがある場合、first_person、tone_rules、casual_level、expression_patternsは必ず具体的に記入してください。空文字にしないでください。
+情報が本当に不明な項目のみ空文字にしてください。JSONのみ返してください。"""
 
     try:
         response = await client.messages.create(
