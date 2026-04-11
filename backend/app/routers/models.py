@@ -192,17 +192,53 @@ async def autofill_model(
     input_text = body.text_input
     if body.youtube_channel_url:
         import re
-        # チャンネルURLから動画を取得して分析
-        try:
-            from app.services.youtube_service import search_videos, get_video_details
-            channel_name = body.youtube_channel_url.split("/")[-1].replace("@", "")
-            videos = await search_videos(query=channel_name, max_results=10)
-            video_texts = []
+        from app.services.youtube_service import search_videos, get_video_details
+        from app.core.config import settings
+        from googleapiclient.discovery import build
 
-            # 動画IDで詳細情報を取得
-            if videos:
+        url = body.youtube_channel_url
+        channel_name = ""
+        channel_id = ""
+
+        # URL形式判定
+        handle_match = re.search(r'youtube\.com/@([^/\?]+)', url)
+        id_match = re.search(r'youtube\.com/channel/([^/\?]+)', url)
+
+        try:
+            youtube = build("youtube", "v3", developerKey=settings.YOUTUBE_API_KEY)
+
+            if id_match:
+                # /channel/UC... 形式 → channels.listでチャンネル情報取得
+                channel_id = id_match.group(1)
+                ch_resp = youtube.channels().list(part="snippet", id=channel_id).execute()
+                if ch_resp.get("items"):
+                    channel_name = ch_resp["items"][0]["snippet"]["title"]
+            elif handle_match:
+                # /@handle 形式 → forHandleで検索
+                handle = handle_match.group(1)
+                ch_resp = youtube.channels().list(part="snippet", forHandle=handle).execute()
+                if ch_resp.get("items"):
+                    channel_name = ch_resp["items"][0]["snippet"]["title"]
+                    channel_id = ch_resp["items"][0]["id"]
+            else:
+                # それ以外 → そのまま検索キーワードとして使用
+                channel_name = url.split("/")[-1].replace("@", "")
+
+            # チャンネルIDで動画を検索
+            video_texts = []
+            if channel_id:
+                search_resp = youtube.search().list(
+                    part="id", channelId=channel_id, type="video",
+                    maxResults=10, order="viewCount"
+                ).execute()
+                video_ids = [item["id"]["videoId"] for item in search_resp.get("items", [])]
+            else:
+                # チャンネルID不明ならチャンネル名で検索
+                videos = await search_videos(query=channel_name, max_results=10)
                 video_ids = [v.get("youtube_video_id", "") for v in videos if v.get("youtube_video_id")]
-                details = await get_video_details(video_ids[:10]) if video_ids else []
+
+            if video_ids:
+                details = await get_video_details(video_ids[:10])
                 for d in details:
                     desc = (d.get("description") or "")[:500]
                     video_texts.append(
@@ -212,10 +248,11 @@ async def autofill_model(
                         f"説明: {desc}"
                     )
 
-            input_text = f"チャンネル: {channel_name}\nURL: {body.youtube_channel_url}\n\n" + "\n---\n".join(video_texts)
+            input_text = f"チャンネル名: {channel_name}\nチャンネルURL: {url}\n\n" + "\n---\n".join(video_texts)
+            logger.info(f"チャンネル分析: {channel_name}, 動画{len(video_texts)}本取得")
         except Exception as e:
             logger.warning(f"YouTube取得エラー: {e}")
-            input_text = f"YouTubeチャンネル: {body.youtube_channel_url}"
+            input_text = f"YouTubeチャンネル: {url}"
 
     if not input_text.strip():
         raise HTTPException(status_code=400, detail="URLまたはテキストを入力してください")
