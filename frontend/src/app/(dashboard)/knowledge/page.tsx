@@ -55,7 +55,11 @@ export default function KnowledgePage() {
     } catch { /* ignore */ }
   };
 
-  const filledCount = (obj: Record<string, string>) => Object.values(obj || {}).filter(v => v && v.trim()).length;
+  const filledCount = (obj: Record<string, unknown>) => Object.values(obj || {}).filter(v => {
+    if (typeof v === "string") return v.trim().length > 0;
+    if (Array.isArray(v)) return v.some(item => item);
+    return !!v;
+  }).length;
 
   return (
     <div>

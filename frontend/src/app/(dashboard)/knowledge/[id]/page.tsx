@@ -196,7 +196,7 @@ export default function ModelEditPage({ params }: { params: Promise<{ id: string
           <div key={field.key} className="rounded-lg border bg-white p-4">
             <label className="mb-1 block text-sm font-medium text-gray-700">{field.label}</label>
             <textarea
-              value={currentData[field.key] || ""}
+              value={Array.isArray(currentData[field.key]) ? (currentData[field.key] as unknown as string[]).join(", ") : (currentData[field.key] || "")}
               onChange={(e) => updateField(tab, field.key, e.target.value)}
               placeholder={field.placeholder}
               rows={3}
