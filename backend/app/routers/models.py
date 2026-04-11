@@ -258,14 +258,19 @@ async def autofill_model(
                         transcript = ytt.fetch(vid, languages=["ja"])
                         t_text = " ".join([s.text for s in transcript.snippets[:100]])
                         transcript_texts.append(f"[動画{vid}の字幕]\n{t_text[:1500]}")
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+                        logger.info(f"字幕取得成功: {vid} ({len(transcript.snippets)}セグメント)")
+                    except Exception as te:
+                        logger.warning(f"字幕取得失敗 {vid}: {type(te).__name__}: {te}")
+            except ImportError as ie:
+                logger.error(f"youtube-transcript-apiがインストールされていません: {ie}")
+            except Exception as te2:
+                logger.error(f"字幕取得全体エラー: {te2}")
 
             transcript_section = ""
             if transcript_texts:
                 transcript_section = "\n\n=== 動画の字幕（口調・話し方の分析用）===\n" + "\n---\n".join(transcript_texts)
+            else:
+                transcript_section = "\n\n※字幕テキストは取得できませんでした。動画タイトルや説明文から口調・話し方を推測してください。"
 
             input_text = f"チャンネル名: {channel_name}\nチャンネルURL: {url}\n\n" + "\n---\n".join(video_texts) + transcript_section
             logger.info(f"チャンネル分析: {channel_name}, 動画{len(video_texts)}本, 字幕{len(transcript_texts)}本取得")
