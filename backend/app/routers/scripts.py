@@ -101,6 +101,15 @@ async def generate_script_sse(
     Claude APIで台本をSSEストリーミング生成する。
     クライアントはServer-Sent Eventsとして受信する。
     """
+    # モデルナレッジ取得（オプション）
+    model_context = None
+    if body.model_id and use_supabase_sdk():
+        from app.routers.models import get_model_context
+        sb_m = get_supabase()
+        model_result = sb_m.table("knowledge_models").select("*").eq("id", str(body.model_id)).execute()
+        if model_result.data:
+            model_context = get_model_context(model_result.data[0])
+
     # RAGコンテキスト取得（オプション）
     rag_context = None
     if body.use_rag:
@@ -141,7 +150,7 @@ async def generate_script_sse(
                     viewer_problem=body.viewer_problem,
                     promise=body.promise,
                     uniqueness=body.uniqueness,
-                    additional_context=body.additional_context,
+                    additional_context=(body.additional_context or "") + ("\n\n" + model_context if model_context else ""),
                     rag_context=rag_context,
                 ):
                     full_text.append(chunk)

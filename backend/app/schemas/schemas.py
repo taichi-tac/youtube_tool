@@ -228,6 +228,7 @@ class ScriptGenerateRequest(BaseModel):
     uniqueness: Optional[str] = Field(None, description="独自性・差別化ポイント")
     additional_context: Optional[str] = Field(None, description="追加コンテキスト")
     use_rag: bool = Field(False, description="RAGで知識を参照するか")
+    model_id: Optional[uuid.UUID] = Field(None, description="使用するナレッジモデルID")
 
 
 # ============================================================

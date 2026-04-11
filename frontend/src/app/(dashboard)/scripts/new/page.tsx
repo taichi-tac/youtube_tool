@@ -7,6 +7,7 @@ import { useKeywordSearch } from "@/hooks/useKeywordSearch";
 import { useKnowledgeSearch } from "@/hooks/useKnowledgeSearch";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { apiClient, getProjectId } from "@/lib/api-client";
 import type { WizardStep, ScriptGenerateRequest } from "@/types/script";
 
 const steps: { step: WizardStep; label: string }[] = [
@@ -64,6 +65,8 @@ export default function ScriptNewPage() {
 
   // Step 3: knowledge
   const [useRag, setUseRag] = useState(false);
+  const [modelId, setModelId] = useState<string>("");
+  const [knowledgeModels, setKnowledgeModels] = useState<any[]>([]);
 
   // URLパラメータから自動入力（企画提案・一気通貫からの遷移）
   useEffect(() => {
@@ -93,6 +96,14 @@ export default function ScriptNewPage() {
 
   useEffect(() => {
     fetchKeywords();
+    // モデル一覧を取得
+    (async () => {
+      try {
+        const pid = await getProjectId();
+        const models = await apiClient.get<any[]>(`/api/v1/models/${pid}`);
+        setKnowledgeModels(models);
+      } catch { /* ignore */ }
+    })();
   }, [fetchKeywords]);
 
   // 台本生成完了時に自動的に編集画面へ遷移
@@ -140,6 +151,7 @@ export default function ScriptNewPage() {
       uniqueness: uniqueness || undefined,
       additional_context: durationContext,
       use_rag: useRag,
+      model_id: modelId || undefined,
     };
     generate(request, duration);
   };
@@ -385,8 +397,25 @@ export default function ScriptNewPage() {
                   onChange={(e) => setUseRag(e.target.checked)}
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-sm font-medium text-gray-700">RAGを使用して台本生成</span>
+                <span className="text-sm font-medium text-gray-700">和理論ナレッジを参照</span>
               </label>
+
+              {/* モデル選択 */}
+              {knowledgeModels.length > 0 && (
+                <div className="mb-4">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">ナレッジモデルを選択</label>
+                  <select value={modelId} onChange={(e) => setModelId(e.target.value)}
+                    className="w-full rounded-lg border px-4 py-2.5 text-sm bg-white focus:border-blue-500 focus:outline-none">
+                    <option value="">モデルなし（和理論のみ）</option>
+                    {knowledgeModels.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-400">
+                    モデルを選ぶと、パーソナル/コンテンツ/プロダクト情報が台本に反映されます
+                  </p>
+                </div>
+              )}
 
               {kgLoading ? (
                 <div className="py-8 text-center text-sm text-gray-500">ナレッジ検索中...</div>

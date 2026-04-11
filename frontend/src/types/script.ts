@@ -31,6 +31,7 @@ export interface ScriptGenerateRequest {
   uniqueness?: string;
   additional_context?: string;
   use_rag?: boolean;
+  model_id?: string;
 }
 
 /** 台本作成リクエスト */
