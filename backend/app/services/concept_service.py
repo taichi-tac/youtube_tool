@@ -25,12 +25,65 @@ async def analyze_url(url: str) -> dict[str, Any]:
     import re
 
     # YouTube URLかどうか判定
-    yt_match = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
+    yt_video_match = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
+    yt_channel_match = re.search(r'youtube\.com/(@[^/\?]+|channel/[^/\?]+)', url)
 
     content_text = ""
-    if yt_match:
+    if yt_channel_match:
+        # YouTubeチャンネルURLの場合: チャンネル情報＋人気動画を取得
+        try:
+            from app.services.youtube_service import get_video_details
+            from googleapiclient.discovery import build
+
+            youtube = build("youtube", "v3", developerKey=settings.YOUTUBE_API_KEY)
+            channel_name = ""
+            channel_id = ""
+            channel_desc = ""
+
+            handle_match = re.search(r'youtube\.com/@([^/\?]+)', url)
+            id_match = re.search(r'youtube\.com/channel/([^/\?]+)', url)
+
+            if id_match:
+                channel_id = id_match.group(1)
+                ch_resp = youtube.channels().list(part="snippet", id=channel_id).execute()
+                if ch_resp.get("items"):
+                    channel_name = ch_resp["items"][0]["snippet"]["title"]
+                    channel_desc = ch_resp["items"][0]["snippet"].get("description", "")
+            elif handle_match:
+                handle = handle_match.group(1)
+                ch_resp = youtube.channels().list(part="snippet", forHandle=handle).execute()
+                if ch_resp.get("items"):
+                    channel_name = ch_resp["items"][0]["snippet"]["title"]
+                    channel_id = ch_resp["items"][0]["id"]
+                    channel_desc = ch_resp["items"][0]["snippet"].get("description", "")
+
+            # チャンネルの人気動画を取得
+            video_texts = []
+            if channel_id:
+                search_resp = youtube.search().list(
+                    part="id", channelId=channel_id, type="video",
+                    maxResults=10, order="viewCount"
+                ).execute()
+                video_ids = [item["id"]["videoId"] for item in search_resp.get("items", [])]
+                if video_ids:
+                    details = await get_video_details(video_ids[:10])
+                    for d in details:
+                        desc = (d.get("description") or "")[:300]
+                        video_texts.append(
+                            f"- {d.get('title', '')} (再生数: {d.get('view_count', 0):,})"
+                        )
+
+            content_text = (
+                f"チャンネル名: {channel_name}\n"
+                f"チャンネル説明: {channel_desc[:1000]}\n"
+                f"人気動画:\n" + "\n".join(video_texts[:10])
+            )
+        except Exception as e:
+            logger.warning(f"YouTubeチャンネル取得エラー: {e}")
+            content_text = f"YouTubeチャンネルURL: {url} (取得失敗)"
+    elif yt_video_match:
         # YouTube動画の場合: YouTube Data APIで詳細取得
-        video_id = yt_match.group(1)
+        video_id = yt_video_match.group(1)
         try:
             from app.services.youtube_service import get_video_details
             details = await get_video_details([video_id])

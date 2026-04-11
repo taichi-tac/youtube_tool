@@ -184,11 +184,11 @@ export default function ConceptPage() {
               <div>
                 <input
                   type="text" value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="LP URL、YouTube動画URL、ブログURL等を入力"
+                  placeholder="YouTubeチャンネルURL、動画URL、LP URL等を入力"
                   className="mb-3 w-full rounded-lg border px-4 py-3 text-sm focus:border-blue-500 focus:outline-none"
                 />
                 <p className="mb-4 text-xs text-gray-400">
-                  商品をお持ちの方: 自社のLP URL　/　まだない方: 参考にしたいLP・動画のURL
+                  チャンネルURL（例: youtube.com/@handle）を入力すると、人気動画から自動分析します
                 </p>
               </div>
             )}
