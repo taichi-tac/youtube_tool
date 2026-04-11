@@ -5,6 +5,36 @@ import PageHeader from "@/components/layout/PageHeader";
 import { apiClient, getProjectId } from "@/lib/api-client";
 import { useRouter } from "next/navigation";
 
+interface VideoResult {
+  id: string;
+  youtube_video_id: string;
+  title: string;
+  channel_title?: string;
+  view_count?: number;
+  like_count?: number;
+  comment_count?: number;
+  published_at?: string;
+  thumbnail_url?: string;
+  views_per_day?: number;
+  is_trending: boolean;
+  duration_seconds?: number;
+}
+
+function formatDuration(seconds?: number): string {
+  if (!seconds) return "-";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 export default function PipelinePage() {
   const router = useRouter();
   const [urls, setUrls] = useState(["", "", ""]);
@@ -12,6 +42,33 @@ export default function PipelinePage() {
   const [step, setStep] = useState<"input" | "analyzing" | "result">("input");
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // YouTube検索
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOrder, setSearchOrder] = useState("relevance");
+  const [searchMaxResults, setSearchMaxResults] = useState(10);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<VideoResult[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearchLoading(true);
+    setSearchError(null);
+    try {
+      const pid = await getProjectId();
+      const data = await apiClient.post<VideoResult[]>(`/api/v1/videos/${pid}/search`, {
+        query: searchQuery.trim(),
+        max_results: searchMaxResults,
+        order: searchOrder,
+      });
+      setSearchResults(data);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "検索に失敗しました");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   const updateUrl = (index: number, value: string) => {
     const updated = [...urls];
@@ -183,6 +240,146 @@ export default function PipelinePage() {
           </button>
         </div>
       )}
+
+      {/* YouTube動画検索セクション */}
+      <div className="mt-12 border-t pt-8">
+        <h2 className="mb-2 text-lg font-semibold text-gray-900">YouTube動画検索</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          キーワードでYouTube動画を検索し、再生数・トレンドを確認できます
+        </p>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+              placeholder="検索キーワードを入力..."
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <select
+            value={searchOrder}
+            onChange={(e) => setSearchOrder(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="relevance">関連度順</option>
+            <option value="viewCount">再生数順</option>
+            <option value="date">新着順</option>
+            <option value="rating">評価順</option>
+          </select>
+          <select
+            value={searchMaxResults}
+            onChange={(e) => setSearchMaxResults(Number(e.target.value))}
+            className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value={10}>10件</option>
+            <option value={20}>20件</option>
+            <option value={30}>30件</option>
+            <option value={50}>50件</option>
+          </select>
+          <button
+            onClick={handleSearch}
+            disabled={searchLoading || !searchQuery.trim()}
+            className="rounded-lg bg-gradient-to-r from-green-600 to-teal-600 px-6 py-2.5 text-sm font-bold text-white hover:from-green-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {searchLoading ? "検索中..." : "検索"}
+          </button>
+        </div>
+
+        {searchError && (
+          <div className="mt-4 rounded-lg bg-red-50 p-4 text-sm text-red-700">{searchError}</div>
+        )}
+
+        {searchLoading && (
+          <div className="flex items-center justify-center py-12">
+            <svg className="animate-spin h-8 w-8 text-green-600" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          </div>
+        )}
+
+        {searchResults.length > 0 && !searchLoading && (
+          <div className="mt-6">
+            <p className="mb-3 text-sm font-medium text-gray-600">
+              検索結果: {searchResults.length}件
+            </p>
+            <div className="overflow-x-auto rounded-xl border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">動画</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">チャンネル</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">再生数</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">日平均</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">高評価</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">コメント</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">時間</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">公開日</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {searchResults.map((v) => (
+                    <tr key={v.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          {v.thumbnail_url && (
+                            <a
+                              href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <img
+                                src={v.thumbnail_url}
+                                alt=""
+                                className="h-14 w-24 rounded object-cover flex-shrink-0"
+                              />
+                            </a>
+                          )}
+                          <a
+                            href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-gray-900 hover:text-blue-600 line-clamp-2 max-w-[280px]"
+                          >
+                            {v.title}
+                          </a>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{v.channel_title || "-"}</td>
+                      <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 whitespace-nowrap">
+                        {v.view_count != null ? v.view_count.toLocaleString() : "-"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm whitespace-nowrap">
+                        {v.views_per_day != null ? (
+                          <span className={v.is_trending ? "font-bold text-orange-600" : "text-gray-600"}>
+                            {v.views_per_day.toLocaleString()}
+                            {v.is_trending && " 🔥"}
+                          </span>
+                        ) : "-"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-600 whitespace-nowrap">
+                        {v.like_count != null ? v.like_count.toLocaleString() : "-"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-600 whitespace-nowrap">
+                        {v.comment_count != null ? v.comment_count.toLocaleString() : "-"}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 whitespace-nowrap">
+                        {formatDuration(v.duration_seconds)}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 whitespace-nowrap">
+                        {formatDate(v.published_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
