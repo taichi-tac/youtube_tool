@@ -248,8 +248,27 @@ async def autofill_model(
                         f"説明: {desc}"
                     )
 
-            input_text = f"チャンネル名: {channel_name}\nチャンネルURL: {url}\n\n" + "\n---\n".join(video_texts)
-            logger.info(f"チャンネル分析: {channel_name}, 動画{len(video_texts)}本取得")
+            # 上位3本の動画の字幕（トランスクリプト）を取得して口調分析に活用
+            transcript_texts = []
+            try:
+                from youtube_transcript_api import YouTubeTranscriptApi
+                ytt = YouTubeTranscriptApi()
+                for vid in video_ids[:3]:
+                    try:
+                        transcript = ytt.fetch(vid, languages=["ja"])
+                        t_text = " ".join([s.text for s in transcript.snippets[:100]])
+                        transcript_texts.append(f"[動画{vid}の字幕]\n{t_text[:1500]}")
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            transcript_section = ""
+            if transcript_texts:
+                transcript_section = "\n\n=== 動画の字幕（口調・話し方の分析用）===\n" + "\n---\n".join(transcript_texts)
+
+            input_text = f"チャンネル名: {channel_name}\nチャンネルURL: {url}\n\n" + "\n---\n".join(video_texts) + transcript_section
+            logger.info(f"チャンネル分析: {channel_name}, 動画{len(video_texts)}本, 字幕{len(transcript_texts)}本取得")
         except Exception as e:
             logger.warning(f"YouTube取得エラー: {e}")
             input_text = f"YouTubeチャンネル: {url}"
