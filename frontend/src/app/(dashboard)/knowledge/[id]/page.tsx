@@ -90,8 +90,11 @@ export default function ModelEditPage({ params }: { params: Promise<{ id: string
     } finally { setSaving(false); }
   };
 
+  const [autofillResult, setAutofillResult] = useState<string>("");
+
   const handleAutofill = async () => {
     setAutofilling(true);
+    setAutofillResult("");
     try {
       const pid = await getProjectId();
       const result = await apiClient.post<any>(`/api/v1/models/${pid}/${modelId}/autofill`, {
@@ -113,9 +116,12 @@ export default function ModelEditPage({ params }: { params: Promise<{ id: string
         for (const [k, v] of Object.entries(result.product_knowledge)) { if (v) filtered[k] = String(v); }
         setProduct(prev => ({ ...prev, ...filtered }));
       }
-      alert("AIで自動入力しました。内容を確認して保存してください。");
+      const pCount = Object.values(result.personal_knowledge || {}).filter((v: any) => v).length;
+      const cCount = Object.values(result.content_knowledge || {}).filter((v: any) => v).length;
+      const prCount = Object.values(result.product_knowledge || {}).filter((v: any) => v).length;
+      setAutofillResult(`AIで ${pCount + cCount + prCount} 項目を入力しました（パーソナル:${pCount} コンテンツ:${cCount} プロダクト:${prCount}）。各タブで確認して保存してください。`);
     } catch (err) {
-      alert("自動入力失敗: " + (err instanceof Error ? err.message : ""));
+      setAutofillResult("自動入力失敗: " + (err instanceof Error ? err.message : ""));
     } finally { setAutofilling(false); }
   };
 
@@ -162,8 +168,13 @@ export default function ModelEditPage({ params }: { params: Promise<{ id: string
             rows={3} className="w-full rounded-lg border px-4 py-2 text-sm focus:border-blue-500 focus:outline-none" />
           <button onClick={handleAutofill} disabled={autofilling || (!autofillUrl.trim() && !autofillText.trim())}
             className="rounded-lg bg-purple-600 px-6 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50">
-            {autofilling ? "AI分析中..." : "AIで自動入力"}
+            {autofilling ? "AI分析中...（30秒〜1分かかります）" : "AIで自動入力"}
           </button>
+          {autofillResult && (
+            <div className={`mt-2 rounded-lg p-3 text-sm ${autofillResult.includes("失敗") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+              {autofillResult}
+            </div>
+          )}
         </div>
       </div>
 

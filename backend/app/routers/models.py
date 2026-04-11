@@ -3,11 +3,14 @@
 パーソナル/コンテンツ/プロダクトナレッジをモデル単位で管理する。
 """
 
+import logging
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_supabase, use_supabase_sdk
 from app.core.security import get_current_user
@@ -191,14 +194,27 @@ async def autofill_model(
         import re
         # チャンネルURLから動画を取得して分析
         try:
-            from app.services.youtube_service import search_videos
+            from app.services.youtube_service import search_videos, get_video_details
             channel_name = body.youtube_channel_url.split("/")[-1].replace("@", "")
-            videos = await search_videos(query=channel_name, max_results=5)
+            videos = await search_videos(query=channel_name, max_results=10)
             video_texts = []
-            for v in videos:
-                video_texts.append(f"タイトル: {v.get('title', '')}\n説明: {v.get('description', '')}")
-            input_text = f"チャンネル: {channel_name}\n\n" + "\n---\n".join(video_texts)
-        except Exception:
+
+            # 動画IDで詳細情報を取得
+            if videos:
+                video_ids = [v.get("youtube_video_id", "") for v in videos if v.get("youtube_video_id")]
+                details = await get_video_details(video_ids[:10]) if video_ids else []
+                for d in details:
+                    desc = (d.get("description") or "")[:500]
+                    video_texts.append(
+                        f"タイトル: {d.get('title', '')}\n"
+                        f"チャンネル: {d.get('channel_title', '')}\n"
+                        f"再生数: {d.get('view_count', 0)}\n"
+                        f"説明: {desc}"
+                    )
+
+            input_text = f"チャンネル: {channel_name}\nURL: {body.youtube_channel_url}\n\n" + "\n---\n".join(video_texts)
+        except Exception as e:
+            logger.warning(f"YouTube取得エラー: {e}")
             input_text = f"YouTubeチャンネル: {body.youtube_channel_url}"
 
     if not input_text.strip():
