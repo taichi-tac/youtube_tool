@@ -143,3 +143,51 @@ async def pipeline_to_script(
             "uniqueness": best_proposal.get("uniqueness", profile.get("strengths", "")),
         },
     }
+
+
+async def regenerate_persona(
+    title: str,
+    concept: str,
+    current_target: str = "",
+    current_inner_voice: str = "",
+) -> dict[str, Any]:
+    """企画のペルソナと心の声を再生成する。"""
+    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+    prompt = f"""以下のYouTube企画に対して、新しいペルソナ（ターゲット人物像）と心の声を生成してください。
+
+## 企画情報
+- タイトル: {title}
+- コンセプト: {concept}
+
+## 現在のペルソナ（これとは別の人物を生成すること）
+- ペルソナ: {current_target or 'なし'}
+- 心の声: {current_inner_voice or 'なし'}
+
+## 要件
+1. 「target」は具体的な一人の人物として描写する（年齢・職業・状況・悩みを含む）
+2. 「inner_voice」はそのペルソナの本音・不安・葛藤をリアルに描写する（話し言葉で）
+3. 現在のペルソナとは異なる切り口・人物像にする
+
+JSON形式で返してください:
+{{
+  "target": "具体的な一人のペルソナ",
+  "inner_voice": "そのペルソナの心の声"
+}}
+JSONのみ返してください。"""
+
+    try:
+        response = await client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0]
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0]
+        return json.loads(text.strip())
+    except Exception as e:
+        logger.error(f"ペルソナ再生成エラー: {e}")
+        return {"error": str(e)}

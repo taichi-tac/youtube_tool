@@ -43,6 +43,53 @@ export default function PipelinePage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // ペルソナモーダル
+  const [personaModal, setPersonaModal] = useState<{ index: number; proposal: any } | null>(null);
+  const [editTarget, setEditTarget] = useState("");
+  const [editInnerVoice, setEditInnerVoice] = useState("");
+  const [personaLoading, setPersonaLoading] = useState(false);
+
+  const openPersonaModal = (index: number, proposal: any) => {
+    setPersonaModal({ index, proposal });
+    setEditTarget(proposal.target || "");
+    setEditInnerVoice(proposal.inner_voice || "");
+  };
+
+  const savePersonaEdit = () => {
+    if (!personaModal || !result) return;
+    const updated = { ...result };
+    updated.analysis.proposals[personaModal.index] = {
+      ...personaModal.proposal,
+      target: editTarget,
+      inner_voice: editInnerVoice,
+    };
+    setResult(updated);
+    setPersonaModal(null);
+  };
+
+  const retryPersona = async () => {
+    if (!personaModal) return;
+    setPersonaLoading(true);
+    try {
+      const pid = await getProjectId();
+      const data = await apiClient.post<{ target: string; inner_voice: string }>(
+        `/api/v1/pipeline/${pid}/regenerate-persona`,
+        {
+          title: personaModal.proposal.title || "",
+          concept: personaModal.proposal.concept || "",
+          current_target: editTarget,
+          current_inner_voice: editInnerVoice,
+        }
+      );
+      if (data.target) setEditTarget(data.target);
+      if (data.inner_voice) setEditInnerVoice(data.inner_voice);
+    } catch (err) {
+      alert("ペルソナ再生成に失敗しました");
+    } finally {
+      setPersonaLoading(false);
+    }
+  };
+
   // YouTube検索
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -223,10 +270,17 @@ export default function PipelinePage() {
                       <h3 className="font-semibold text-gray-900">{p.title}</h3>
                       <p className="mt-1 text-sm text-gray-600">{p.concept}</p>
                       <div className="mt-2 text-xs text-gray-500">
-                        <p>ペルソナ: {p.target}</p>
-                        {p.inner_voice && (
-                          <p className="mt-1 italic text-gray-400">"{p.inner_voice}"</p>
-                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openPersonaModal(i, p); }}
+                          className="text-left hover:bg-blue-50 rounded px-1 py-0.5 -mx-1 transition-colors group"
+                          title="クリックしてペルソナを詳細表示・編集"
+                        >
+                          <span className="group-hover:text-blue-600">ペルソナ: {p.target}</span>
+                          {p.inner_voice && (
+                            <p className="mt-1 italic text-gray-400 group-hover:text-blue-400">"{p.inner_voice}"</p>
+                          )}
+                          <span className="ml-1 text-blue-400 opacity-0 group-hover:opacity-100 text-[10px]">[ 編集 ]</span>
+                        </button>
                         <p className="mt-1">差別化: {p.uniqueness}</p>
                       </div>
                     </div>
@@ -256,6 +310,61 @@ export default function PipelinePage() {
             >
               別の動画で分析する
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ペルソナ編集モーダル */}
+      {personaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPersonaModal(null)}>
+          <div className="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">ペルソナ設計</h3>
+              <button onClick={() => setPersonaModal(null)} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+
+            <p className="mb-4 text-xs text-gray-500 bg-gray-50 rounded p-2">
+              企画: {personaModal.proposal.title}
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">ペルソナ（具体的な一人）</label>
+                <textarea
+                  value={editTarget}
+                  onChange={(e) => setEditTarget(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="年齢・職業・状況・悩みを含む具体的な人物像"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">心の声（本音・不安・葛藤）</label>
+                <textarea
+                  value={editInnerVoice}
+                  onChange={(e) => setEditInnerVoice(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border px-3 py-2 text-sm italic focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="そのペルソナが心の中で思っていること"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3 justify-end">
+              <button
+                onClick={retryPersona}
+                disabled={personaLoading}
+                className="rounded-lg border border-purple-300 px-4 py-2 text-sm font-medium text-purple-600 hover:bg-purple-50 disabled:opacity-50"
+              >
+                {personaLoading ? "再生成中..." : "AIで再生成"}
+              </button>
+              <button
+                onClick={savePersonaEdit}
+                className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                保存
+              </button>
+            </div>
           </div>
         </div>
       )}
