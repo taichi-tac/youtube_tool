@@ -191,3 +191,79 @@ JSONのみ返してください。"""
     except Exception as e:
         logger.error(f"ペルソナ再生成エラー: {e}")
         return {"error": str(e)}
+
+
+async def regenerate_proposals(
+    video_urls: list[str],
+    feedback: str,
+    current_proposals: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """フィードバックを反映して企画を出し直す。"""
+    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+    # 動画情報を再取得
+    video_ids = []
+    for url in video_urls:
+        match = re.search(r'(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
+        if match:
+            video_ids.append(match.group(1))
+
+    video_text = ""
+    if video_ids:
+        from app.services.youtube_service import get_video_details
+        details = await get_video_details(video_ids)
+        for d in details:
+            video_text += f"- {d.get('title', '')}（再生数: {d.get('view_count', 0):,}）\n"
+
+    # 現在の企画をテキスト化
+    current_text = ""
+    if current_proposals:
+        for i, p in enumerate(current_proposals, 1):
+            current_text += (
+                f"\n企画{i}: {p.get('title', '')}\n"
+                f"  コンセプト: {p.get('concept', '')}\n"
+                f"  ペルソナ: {p.get('target', '')}\n"
+                f"  心の声: {p.get('inner_voice', '')}\n"
+                f"  差別化: {p.get('uniqueness', '')}\n"
+            )
+
+    prompt = f"""以下のYouTube動画分析に基づいて、企画を出し直してください。
+
+## 分析した動画
+{video_text}
+
+## 前回の企画（改善が必要）
+{current_text}
+
+## ユーザーからのフィードバック（最重要：これを必ず反映すること）
+{feedback}
+
+## 要件
+- フィードバックの指摘を全て反映した新しい企画を5つ生成する
+- 各企画の「target」は具体的な一人のペルソナ（年齢・職業・状況・悩み）で描写する
+- 「inner_voice」にはそのペルソナの心の声（本音・不安・葛藤）を入れる
+- 前回と同じ企画を出さない
+
+JSON形式で返してください:
+{{
+  "proposals": [
+    {{"title": "タイトル案", "concept": "コンセプト", "target": "具体的な一人のペルソナ", "inner_voice": "心の声", "uniqueness": "差別化ポイント"}}
+  ]
+}}
+JSONのみ返してください。"""
+
+    try:
+        response = await client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0]
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0]
+        return json.loads(text.strip())
+    except Exception as e:
+        logger.error(f"企画再生成エラー: {e}")
+        return {"error": str(e)}

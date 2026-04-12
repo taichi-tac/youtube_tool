@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_supabase, use_supabase_sdk
 from app.core.security import get_current_user
-from app.services.pipeline_service import analyze_video_structure, pipeline_to_script, regenerate_persona
+from app.services.pipeline_service import analyze_video_structure, pipeline_to_script, regenerate_persona, regenerate_proposals
 
 router = APIRouter(prefix="/pipeline", tags=["パイプライン"])
 
@@ -29,6 +29,12 @@ class RegeneratePersonaRequest(BaseModel):
     concept: str
     current_target: str = ""
     current_inner_voice: str = ""
+
+
+class RegenerateProposalsRequest(BaseModel):
+    video_urls: list[str]
+    feedback: str
+    current_proposals: list[dict[str, Any]] = []
 
 
 @router.post("/{project_id}/analyze")
@@ -84,4 +90,18 @@ async def regenerate_persona_endpoint(
         concept=body.concept,
         current_target=body.current_target,
         current_inner_voice=body.current_inner_voice,
+    )
+
+
+@router.post("/{project_id}/regenerate-proposals")
+async def regenerate_proposals_endpoint(
+    project_id: uuid.UUID,
+    body: RegenerateProposalsRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """フィードバックを反映して企画を出し直す"""
+    return await regenerate_proposals(
+        video_urls=body.video_urls,
+        feedback=body.feedback,
+        current_proposals=body.current_proposals,
     )

@@ -90,6 +90,38 @@ export default function PipelinePage() {
     }
   };
 
+  // 企画出し直し
+  const [showRetryForm, setShowRetryForm] = useState(false);
+  const [retryFeedback, setRetryFeedback] = useState("");
+  const [retryLoading, setRetryLoading] = useState(false);
+
+  const handleRetryWithFeedback = async () => {
+    if (!retryFeedback.trim()) return;
+    setRetryLoading(true);
+    try {
+      const pid = await getProjectId();
+      const data = await apiClient.post<{ proposals: any[] }>(
+        `/api/v1/pipeline/${pid}/regenerate-proposals`,
+        {
+          video_urls: validUrls,
+          feedback: retryFeedback.trim(),
+          current_proposals: result?.analysis?.proposals || [],
+        }
+      );
+      if (data.proposals) {
+        const updated = { ...result };
+        updated.analysis = { ...updated.analysis, proposals: data.proposals };
+        setResult(updated);
+        setShowRetryForm(false);
+        setRetryFeedback("");
+      }
+    } catch (err) {
+      alert("企画の再生成に失敗しました");
+    } finally {
+      setRetryLoading(false);
+    }
+  };
+
   // YouTube検索
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -296,13 +328,52 @@ export default function PipelinePage() {
             </div>
           </div>
 
+          {/* 出し直しフォーム */}
+          {showRetryForm && (
+            <div className="rounded-xl border-2 border-purple-200 bg-purple-50 p-5">
+              <h3 className="mb-2 text-sm font-semibold text-purple-800">企画の改善ポイントを入力</h3>
+              <p className="mb-3 text-xs text-purple-600">
+                どこが気になったか、どう変えてほしいかを書いてください。フィードバックを反映した新しい企画が生成されます。
+              </p>
+              <textarea
+                value={retryFeedback}
+                onChange={(e) => setRetryFeedback(e.target.value)}
+                rows={3}
+                placeholder="例: もっとニッチなターゲットにしてほしい / タイトルにインパクトが足りない / 差別化が弱い"
+                className="mb-3 w-full rounded-lg border border-purple-300 px-4 py-2.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={handleRetryWithFeedback}
+                  disabled={retryLoading || !retryFeedback.trim()}
+                  className="rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2 text-sm font-bold text-white hover:from-purple-700 hover:to-blue-700 disabled:opacity-50"
+                >
+                  {retryLoading ? "再生成中..." : "この内容で企画を出し直す"}
+                </button>
+                <button
+                  onClick={() => { setShowRetryForm(false); setRetryFeedback(""); }}
+                  className="rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3">
+            <button
+              onClick={() => setShowRetryForm(true)}
+              disabled={showRetryForm}
+              className="rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2 text-sm font-bold text-white hover:from-purple-700 hover:to-blue-700 disabled:opacity-50"
+            >
+              改善ポイントを指摘して出し直す
+            </button>
             <button
               onClick={handleAnalyze}
               disabled={loading}
-              className="rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2 text-sm font-bold text-white hover:from-purple-700 hover:to-blue-700 disabled:opacity-50"
+              className="rounded-lg border border-purple-300 px-4 py-2 text-sm font-medium text-purple-600 hover:bg-purple-50 disabled:opacity-50"
             >
-              {loading ? "再分析中..." : "同じURLで企画を出し直す"}
+              {loading ? "再分析中..." : "そのまま出し直す"}
             </button>
             <button
               onClick={() => { setStep("input"); setResult(null); }}
