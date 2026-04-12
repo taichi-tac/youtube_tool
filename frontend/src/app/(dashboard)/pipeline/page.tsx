@@ -222,9 +222,12 @@ export default function PipelinePage() {
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900">{p.title}</h3>
                       <p className="mt-1 text-sm text-gray-600">{p.concept}</p>
-                      <div className="mt-2 flex gap-3 text-xs text-gray-500">
-                        <span>ターゲット: {p.target}</span>
-                        <span>差別化: {p.uniqueness}</span>
+                      <div className="mt-2 text-xs text-gray-500">
+                        <p>ペルソナ: {p.target}</p>
+                        {p.inner_voice && (
+                          <p className="mt-1 italic text-gray-400">"{p.inner_voice}"</p>
+                        )}
+                        <p className="mt-1">差別化: {p.uniqueness}</p>
                       </div>
                     </div>
                     <button
