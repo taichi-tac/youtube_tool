@@ -239,12 +239,21 @@ export default function PipelinePage() {
             </div>
           </div>
 
-          <button
-            onClick={() => { setStep("input"); setResult(null); }}
-            className="rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            別の動画で分析する
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleAnalyze}
+              disabled={loading}
+              className="rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2 text-sm font-bold text-white hover:from-purple-700 hover:to-blue-700 disabled:opacity-50"
+            >
+              {loading ? "再分析中..." : "同じURLで企画を出し直す"}
+            </button>
+            <button
+              onClick={() => { setStep("input"); setResult(null); }}
+              className="rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              別の動画で分析する
+            </button>
+          </div>
         </div>
       )}
 
