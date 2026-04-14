@@ -1,0 +1,126 @@
+{
+  "version": "2.0.0",
+  "meta": {
+    "workflowId": "user_request",
+    "strict": true,
+    "currentPhase": 1,
+    "startedAt": "2026-04-11T14:21:42.140Z",
+    "lastUpdated": "2026-04-12T08:43:35.828Z",
+    "autoMappedSkills": [
+      {
+        "name": "YouTube教材動画作成",
+        "required_skills": [
+          "video-course"
+        ],
+        "strict": false
+      }
+    ]
+  },
+  "intentContractRef": null,
+  "activeSkillId": null,
+  "activeSkillStepId": null,
+  "baseline": {
+    "files": {}
+  },
+  "registeredInputs": {
+    "referenceAssets": []
+  },
+  "locks": {
+    "referenceAssets": []
+  },
+  "evidence": {
+    "skills_used": {},
+    "read_log": [],
+    "approved_deviations": [],
+    "skillEvidence": [],
+    "skillEvidenceIndexByStepId": {},
+    "required_skills": {
+      "0": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "youtube-tool-5z2u": {
+        "requestedAt": "2026-04-12T08:43:35.828Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "pipeline": {
+        "requestedAt": "2026-04-12T08:43:35.828Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "script": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "u": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "home": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "projects": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "1lhXA1eblRlA2V5EynLXeQhdL6fxIfsC0aAaIFYZl01F4vF_DZNO61wOZ": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "edit": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "docs": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "spreadsheets": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "d": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "1xC49iny2HwovbDlrN3aNS5QX6KObuSRkyAmDGfg_pZ8": {
+        "requestedAt": "2026-04-11T14:25:30.680Z",
+        "used": false,
+        "autoMapped": false
+      },
+      "video-course": {
+        "requestedAt": "2026-04-12T08:43:35.828Z",
+        "used": false,
+        "autoMapped": true
+      },
+      "onboarding": {
+        "requestedAt": "2026-04-11T16:04:11.126Z",
+        "used": false,
+        "autoMapped": false
+      }
+    }
+  },
+  "decisions": {
+    "assetReuse": []
+  },
+  "approvals": {
+    "deviations": []
+  },
+  "validations": {
+    "lastResults": []
+  },
+  "completed_phases": [],
+  "blockers": []
+}

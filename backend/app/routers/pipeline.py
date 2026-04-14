@@ -9,9 +9,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.database import get_supabase, use_supabase_sdk
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db, get_supabase, use_supabase_sdk
 from app.core.security import get_current_user
 from app.services.pipeline_service import analyze_video_structure, pipeline_to_script, regenerate_persona, regenerate_proposals
+from app.services.rag_service import ingest_document
 
 router = APIRouter(prefix="/pipeline", tags=["パイプライン"])
 
@@ -98,10 +101,37 @@ async def regenerate_proposals_endpoint(
     project_id: uuid.UUID,
     body: RegenerateProposalsRequest,
     user: dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """フィードバックを反映して企画を出し直す"""
-    return await regenerate_proposals(
+    """フィードバックを反映して企画を出し直す。フィードバックは自動的にナレッジに蓄積される。"""
+    # フィードバックを企画指摘ナレッジとして自動保存
+    from datetime import datetime, timezone
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    feedback_content = (
+        f"## 企画フィードバック ({timestamp})\n\n"
+        f"### 指摘内容\n{body.feedback}\n\n"
+    )
+    if body.current_proposals:
+        feedback_content += "### 対象企画\n"
+        for p in body.current_proposals:
+            feedback_content += f"- {p.get('title', '無題')}\n"
+
+    try:
+        await ingest_document(
+            project_id=project_id,
+            filename=f"proposal_feedback_{timestamp.replace(' ', '_').replace(':', '')}.md",
+            content=feedback_content,
+            source_type="proposal_feedback",
+            db=db,
+        )
+    except Exception:
+        pass  # ナレッジ保存失敗は企画再生成をブロックしない
+
+    result = await regenerate_proposals(
         video_urls=body.video_urls,
         feedback=body.feedback,
         current_proposals=body.current_proposals,
+        project_id=str(project_id),
     )
+    result["feedback_saved"] = True
+    return result

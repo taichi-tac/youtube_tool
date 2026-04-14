@@ -193,10 +193,30 @@ JSONのみ返してください。"""
         return {"error": str(e)}
 
 
+async def _get_past_feedback(project_id: str) -> str:
+    """過去の企画フィードバックナレッジを取得する。"""
+    try:
+        from app.core.database import get_supabase, use_supabase_sdk
+        if use_supabase_sdk():
+            sb = get_supabase()
+            result = sb.table("knowledge_chunks").select("content").eq(
+                "project_id", project_id
+            ).eq(
+                "source_type", "proposal_feedback"
+            ).order("created_at", desc=True).limit(10).execute()
+            if result.data:
+                feedbacks = [r["content"] for r in result.data]
+                return "\n---\n".join(feedbacks)
+    except Exception:
+        pass
+    return ""
+
+
 async def regenerate_proposals(
     video_urls: list[str],
     feedback: str,
     current_proposals: list[dict[str, Any]] | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """フィードバックを反映して企画を出し直す。"""
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
@@ -227,6 +247,18 @@ async def regenerate_proposals(
                 f"  差別化: {p.get('uniqueness', '')}\n"
             )
 
+    # 過去のフィードバックナレッジを取得
+    past_feedback = ""
+    if project_id:
+        past_feedback = await _get_past_feedback(project_id)
+
+    past_section = ""
+    if past_feedback:
+        past_section = f"""
+## 過去のフィードバック履歴（学習済み：同じミスを繰り返さないこと）
+{past_feedback}
+"""
+
     prompt = f"""以下のYouTube動画分析に基づいて、企画を出し直してください。
 
 ## 分析した動画
@@ -237,9 +269,9 @@ async def regenerate_proposals(
 
 ## ユーザーからのフィードバック（最重要：これを必ず反映すること）
 {feedback}
-
+{past_section}
 ## 要件
-- フィードバックの指摘を全て反映した新しい企画を5つ生成する
+- 今回のフィードバックと過去のフィードバック履歴の指摘を全て反映した新しい企画を5つ生成する
 - 各企画の「target」は具体的な一人のペルソナ（年齢・職業・状況・悩み）で描写する
 - 「inner_voice」にはそのペルソナの心の声（本音・不安・葛藤）を入れる
 - 前回と同じ企画を出さない

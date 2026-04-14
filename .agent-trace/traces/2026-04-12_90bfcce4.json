@@ -1,0 +1,38 @@
+{
+  "version": "0.1.0",
+  "id": "90bfcce4-c46d-4af8-b578-0d773b183512",
+  "timestamp": "2026-04-12T08:29:21.716Z",
+  "files": [
+    {
+      "path": "backend/app/utils/prompt_builder.py",
+      "conversations": [
+        {
+          "contributor_type": "ai",
+          "model": "anthropic/claude-opus-4-5-20251101",
+          "ranges": [
+            {
+              "start_line": 1,
+              "end_line": -1
+            }
+          ],
+          "description": "Edit: text replacement"
+        }
+      ]
+    }
+  ],
+  "tool": {
+    "name": "taisun-agent",
+    "version": "2.10.1"
+  },
+  "metadata": {
+    "dev.taisun": {
+      "hook": "agent-trace-capture",
+      "tool_used": "Edit"
+    }
+  },
+  "vcs": {
+    "type": "git",
+    "commit": "6e9acab2f6104ed2cfa13c399a8ddbaae8e6679c",
+    "branch": "main"
+  }
+}
