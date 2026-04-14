@@ -514,104 +514,119 @@ export default function PipelinePage() {
           </div>
         )}
 
-        {searchResults.length > 0 && !searchLoading && (
+        {searchResults.length > 0 && !searchLoading && (() => {
+          const avgVpd = searchResults.reduce((s, v) => s + (v.views_per_day || 0), 0) / searchResults.length;
+          const maxVpd = Math.max(...searchResults.map(v => v.views_per_day || 0));
+          return (
           <div className="mt-6">
-            <p className="mb-3 text-sm font-medium text-gray-600">
-              検索結果: {searchResults.length}件
-            </p>
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">動画</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">チャンネル</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">再生数</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">日平均</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">高評価</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">コメント</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">時間</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">公開日</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">URL</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {searchResults.map((v) => (
-                    <tr key={v.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          {v.thumbnail_url && (
-                            <a
-                              href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <img
-                                src={v.thumbnail_url}
-                                alt=""
-                                className="h-14 w-24 rounded object-cover flex-shrink-0"
-                              />
-                            </a>
-                          )}
-                          <a
-                            href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-medium text-gray-900 hover:text-blue-600 line-clamp-2 max-w-[280px]"
-                          >
-                            {v.title}
-                          </a>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{v.channel_title || "-"}</td>
-                      <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 whitespace-nowrap">
-                        {v.view_count != null ? v.view_count.toLocaleString() : "-"}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm whitespace-nowrap">
-                        {v.views_per_day != null ? (
-                          <span className={v.is_trending ? "font-bold text-orange-600" : "text-gray-600"}>
-                            {v.views_per_day.toLocaleString()}
-                            {v.is_trending && " 🔥"}
-                          </span>
-                        ) : "-"}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-600 whitespace-nowrap">
-                        {v.like_count != null ? v.like_count.toLocaleString() : "-"}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-600 whitespace-nowrap">
-                        {v.comment_count != null ? v.comment_count.toLocaleString() : "-"}
-                      </td>
-                      <td className="px-4 py-3 text-center text-sm text-gray-600 whitespace-nowrap">
-                        {formatDuration(v.duration_seconds)}
-                      </td>
-                      <td className="px-4 py-3 text-center text-sm text-gray-600 whitespace-nowrap">
-                        {formatDate(v.published_at)}
-                      </td>
-                      <td className="px-4 py-3 text-center whitespace-nowrap">
-                        <button
-                          onClick={() => copyUrl(v.youtube_video_id)}
-                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                          title="URLをコピー"
-                        >
-                          {copiedId === v.youtube_video_id ? (
-                            <svg className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                            </svg>
-                          )}
-                          {copiedId === v.youtube_video_id ? "コピー済" : "コピー"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* サマリーバー */}
+            <div className="mb-6 grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-blue-600 p-3 text-center text-white">
+                <p className="text-xs opacity-80">発見した動画数</p>
+                <p className="text-xl font-bold">{searchResults.length}件</p>
+              </div>
+              <div className="rounded-lg bg-blue-600 p-3 text-center text-white">
+                <p className="text-xs opacity-80">平均 日次再生</p>
+                <p className="text-xl font-bold">{avgVpd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+              </div>
+              <div className="rounded-lg bg-blue-600 p-3 text-center text-white">
+                <p className="text-xs opacity-80">最大 日次再生</p>
+                <p className="text-xl font-bold">{maxVpd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+              </div>
+            </div>
+
+            {/* タイルグリッド */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {searchResults.map((v) => {
+                const engRate = v.view_count ? (((v.like_count || 0) + (v.comment_count || 0)) / v.view_count * 100) : 0;
+                const likeRate = v.view_count ? ((v.like_count || 0) / v.view_count * 100) : 0;
+                const commentRate = v.view_count ? ((v.comment_count || 0) / v.view_count * 100) : 0;
+                return (
+                <div key={v.id} className="rounded-xl border bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                  {/* サムネイル */}
+                  <div className="relative">
+                    {v.thumbnail_url && (
+                      <a href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`} target="_blank" rel="noopener noreferrer">
+                        <img src={v.thumbnail_url} alt="" className="w-full h-44 object-cover" />
+                      </a>
+                    )}
+                    {v.is_trending && (
+                      <span className="absolute top-2 right-2 rounded bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                        {v.views_per_day?.toLocaleString()}/日
+                      </span>
+                    )}
+                  </div>
+
+                  {/* タイトル・チャンネル */}
+                  <div className="p-3">
+                    <a
+                      href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-sm font-semibold text-gray-900 hover:text-blue-600 line-clamp-2"
+                    >
+                      {v.title}
+                    </a>
+                    <p className="mt-1 text-xs text-gray-500">{v.channel_title || "-"}</p>
+                  </div>
+
+                  {/* 指標グリッド */}
+                  <div className="grid grid-cols-2 gap-px bg-gray-100 border-t">
+                    <div className="bg-white px-3 py-2">
+                      <p className="text-[10px] text-gray-400">再生数</p>
+                      <p className="text-sm font-bold text-gray-900">{v.view_count != null ? v.view_count.toLocaleString() : "-"}</p>
+                    </div>
+                    <div className="bg-white px-3 py-2">
+                      <p className="text-[10px] text-gray-400">急上昇率(1日)</p>
+                      <p className="text-sm font-bold text-gray-900">{v.views_per_day != null ? v.views_per_day.toLocaleString() : "-"}</p>
+                    </div>
+                    <div className="bg-white px-3 py-2">
+                      <p className="text-[10px] text-gray-400">エンゲージメント率</p>
+                      <p className="text-sm font-bold text-gray-900">{engRate.toFixed(2)}%</p>
+                    </div>
+                    <div className="bg-white px-3 py-2">
+                      <p className="text-[10px] text-gray-400">高評価率</p>
+                      <p className="text-sm font-bold text-gray-900">{likeRate.toFixed(2)}%</p>
+                    </div>
+                    <div className="bg-white px-3 py-2">
+                      <p className="text-[10px] text-gray-400">コメント率</p>
+                      <p className="text-sm font-bold text-gray-900">{commentRate.toFixed(2)}%</p>
+                    </div>
+                    <div className="bg-white px-3 py-2">
+                      <p className="text-[10px] text-gray-400">高評価数</p>
+                      <p className="text-sm font-bold text-gray-900">{v.like_count != null ? v.like_count.toLocaleString() : "-"}</p>
+                    </div>
+                  </div>
+
+                  {/* ボタン・フッター */}
+                  <div className="flex gap-2 border-t p-3">
+                    <a
+                      href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex-1 rounded-lg bg-red-500 py-1.5 text-center text-xs font-bold text-white hover:bg-red-600"
+                    >
+                      動画を見る
+                    </a>
+                    <button
+                      onClick={() => copyUrl(v.youtube_video_id)}
+                      className={`flex-1 rounded-lg border py-1.5 text-center text-xs font-bold transition-colors ${
+                        copiedId === v.youtube_video_id ? "border-green-400 text-green-600 bg-green-50" : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {copiedId === v.youtube_video_id ? "コピー済" : "URLコピー"}
+                    </button>
+                  </div>
+
+                  <div className="flex border-t px-3 py-2 text-[10px] text-gray-400 gap-4">
+                    <span>{formatDuration(v.duration_seconds)}</span>
+                    <span>{formatDate(v.published_at)}</span>
+                  </div>
+                </div>
+                );
+              })}
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
