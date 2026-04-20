@@ -122,6 +122,11 @@ class VideoSearchRequest(BaseModel):
     keyword_id: Optional[uuid.UUID] = Field(None, description="紐づけるキーワードID")
 
 
+class VideoUrlRequest(BaseModel):
+    """URL指定で動画を追加するリクエスト"""
+    url: str = Field(..., description="YouTube動画URL")
+
+
 class VideoResponse(BaseModel):
     """動画レスポンス"""
     id: uuid.UUID

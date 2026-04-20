@@ -104,12 +104,36 @@ export function useVideoAnalysis() {
     }
   }, []);
 
+  /** YouTube URLを指定して動画を追加 */
+  const addVideoByUrl = useCallback(async (url: string): Promise<Video | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const pid = await getProjectId();
+      const result = await apiClient.post<Video>(
+        `/api/v1/videos/${pid}/add-by-url`,
+        { url },
+      );
+      setVideos((prev) => {
+        const exists = prev.some((v) => v.id === result.id);
+        return exists ? prev : [result, ...prev];
+      });
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "URLからの追加に失敗しました");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     videos,
     loading,
     error,
     fetchVideos,
     searchVideos,
+    addVideoByUrl,
     fetchVideo,
     comments,
     commentsLoading,

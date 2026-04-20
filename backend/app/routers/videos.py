@@ -21,6 +21,7 @@ from app.schemas.schemas import (
     VideoCommentResponse,
     VideoResponse,
     VideoSearchRequest,
+    VideoUrlRequest,
 )
 from app.services.comment_service import (
     fetch_and_store_comments,
@@ -180,6 +181,109 @@ async def search_and_save_videos(
         await db.refresh(v)
 
     return saved_videos
+
+
+def _extract_youtube_video_id(url: str) -> Optional[str]:
+    """YouTube URLから動画IDを抽出する"""
+    import re
+    patterns = [
+        r"(?:youtube\.com/watch\?(?:.*&)?v=)([A-Za-z0-9_-]{11})",
+        r"(?:youtu\.be/)([A-Za-z0-9_-]{11})",
+        r"(?:youtube\.com/shorts/)([A-Za-z0-9_-]{11})",
+        r"(?:youtube\.com/embed/)([A-Za-z0-9_-]{11})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+
+@router.post("/{project_id}/add-by-url", response_model=VideoResponse)
+async def add_video_by_url(
+    project_id: uuid.UUID,
+    body: VideoUrlRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """YouTube URLを指定して動画を追加する"""
+    yt_id = _extract_youtube_video_id(body.url)
+    if not yt_id:
+        raise HTTPException(status_code=400, detail="有効なYouTube URLではありません")
+
+    user_api_key = None
+    if use_supabase_sdk():
+        sb = get_supabase()
+        proj = sb.table("projects").select("youtube_api_key").eq("id", str(project_id)).execute()
+        if proj.data and proj.data[0].get("youtube_api_key"):
+            user_api_key = proj.data[0]["youtube_api_key"]
+
+    now = datetime.now(timezone.utc)
+
+    if use_supabase_sdk():
+        sb = get_supabase()
+        existing = sb.table("videos").select("*").eq("youtube_video_id", yt_id).execute()
+        if existing.data:
+            return existing.data[0]
+
+        details = await get_video_details([yt_id], api_key=user_api_key)
+        if not details:
+            raise HTTPException(status_code=404, detail="動画が見つかりません")
+        detail = details[0]
+
+        published_at = detail.get("published_at")
+        view_count = detail.get("view_count")
+        trending = _calc_trending_fields(view_count, published_at, now)
+
+        video_data = {
+            "project_id": str(project_id),
+            "youtube_video_id": yt_id,
+            "title": detail.get("title", ""),
+            "description": detail.get("description"),
+            "channel_title": detail.get("channel_title"),
+            "channel_id": detail.get("channel_id"),
+            "published_at": published_at.isoformat() if isinstance(published_at, datetime) else published_at,
+            "view_count": view_count,
+            "like_count": detail.get("like_count"),
+            "comment_count": detail.get("comment_count"),
+            "duration_seconds": detail.get("duration_seconds"),
+            "thumbnail_url": detail.get("thumbnail_url"),
+            "views_per_day": trending["views_per_day"],
+            "is_trending": trending["is_trending"],
+        }
+        insert_result = sb.table("videos").insert(video_data).execute()
+        return insert_result.data[0]
+
+    # SQLAlchemy path
+    stmt = select(Video).where(Video.youtube_video_id == yt_id)
+    existing = (await db.execute(stmt)).scalar_one_or_none()
+    if existing:
+        return existing
+
+    details = await get_video_details([yt_id], api_key=user_api_key)
+    if not details:
+        raise HTTPException(status_code=404, detail="動画が見つかりません")
+    detail = details[0]
+
+    video = Video(
+        project_id=project_id,
+        youtube_video_id=yt_id,
+        title=detail.get("title", ""),
+        description=detail.get("description"),
+        channel_title=detail.get("channel_title"),
+        channel_id=detail.get("channel_id"),
+        published_at=detail.get("published_at"),
+        view_count=detail.get("view_count"),
+        like_count=detail.get("like_count"),
+        comment_count=detail.get("comment_count"),
+        duration_seconds=detail.get("duration_seconds"),
+        thumbnail_url=detail.get("thumbnail_url"),
+    )
+    _update_trending_fields(video, now)
+    db.add(video)
+    await db.flush()
+    await db.refresh(video)
+    return video
 
 
 def _update_trending_fields(video: Video, now: datetime) -> None:

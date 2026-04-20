@@ -12,9 +12,11 @@ type SortKey = "views_per_day" | "view_count" | "published_at";
 type PeriodFilter = "all" | "180" | "90" | "30";
 
 export default function VideosPage() {
-  const { videos, loading, error, fetchVideos, searchVideos } = useVideoAnalysis();
+  const { videos, loading, error, fetchVideos, searchVideos, addVideoByUrl } = useVideoAnalysis();
   const { analyzeThumbnails, analyzing } = useThumbnailAnalysis();
   const [searchQuery, setSearchQuery] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const [urlLoading, setUrlLoading] = useState(false);
 
   // フィルタ・ソート
   const [sortKey, setSortKey] = useState<SortKey>("views_per_day");
@@ -25,11 +27,18 @@ export default function VideosPage() {
     fetchVideos();
   }, [fetchVideos]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearch = () => {
     if (searchQuery.trim()) {
       searchVideos(searchQuery.trim());
     }
+  };
+
+  const handleAddByUrl = async () => {
+    if (!urlInput.trim()) return;
+    setUrlLoading(true);
+    await addVideoByUrl(urlInput.trim());
+    setUrlLoading(false);
+    setUrlInput("");
   };
 
   const handleThumbnailAnalysis = async (videoId: string) => {
@@ -77,23 +86,45 @@ export default function VideosPage() {
     <div>
       <PageHeader title="動画一覧" description="YouTube動画を検索・保存・閲覧" />
 
-      {/* 検索フォーム */}
-      <form onSubmit={handleSearch} className="mb-4 flex gap-3">
+      {/* キーワード検索 */}
+      <div className="mb-3 flex gap-3">
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="YouTube動画を検索..."
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          placeholder="YouTube動画をキーワード検索..."
           className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
         <button
-          type="submit"
+          type="button"
+          onClick={handleSearch}
           disabled={loading || !searchQuery.trim()}
           className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? "検索中..." : "検索"}
         </button>
-      </form>
+      </div>
+
+      {/* URL直接入力 */}
+      <div className="mb-4 flex gap-3">
+        <input
+          type="text"
+          value={urlInput}
+          onChange={(e) => setUrlInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAddByUrl()}
+          placeholder="YouTube URLを入力して追加 (例: https://youtu.be/xxxxx)"
+          className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        />
+        <button
+          type="button"
+          onClick={handleAddByUrl}
+          disabled={urlLoading || !urlInput.trim()}
+          className="rounded-lg bg-emerald-600 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {urlLoading ? "追加中..." : "URLで追加"}
+        </button>
+      </div>
 
       {/* フィルタ・ソートバー */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
