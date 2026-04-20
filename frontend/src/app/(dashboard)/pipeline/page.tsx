@@ -161,6 +161,19 @@ export default function PipelinePage() {
     setTimeout(() => setCopiedId(null), 1500);
   };
 
+  const addToUrls = (videoId: string) => {
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    setUrls((prev) => {
+      const emptyIndex = prev.findIndex((u) => !u.trim());
+      if (emptyIndex === -1) return prev; // 全枠埋まっていれば何もしない
+      const updated = [...prev];
+      updated[emptyIndex] = url;
+      return updated;
+    });
+    // 入力欄にスクロール
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const updateUrl = (index: number, value: string) => {
     const updated = [...urls];
     updated[index] = value;
@@ -467,7 +480,6 @@ export default function PipelinePage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
               placeholder="検索キーワードを入力..."
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
@@ -613,6 +625,13 @@ export default function PipelinePage() {
                       }`}
                     >
                       {copiedId === v.youtube_video_id ? "コピー済" : "URLコピー"}
+                    </button>
+                    <button
+                      onClick={() => addToUrls(v.youtube_video_id)}
+                      disabled={!urls.some((u) => !u.trim())}
+                      className="flex-1 rounded-lg bg-purple-600 py-1.5 text-center text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      分析対象に追加
                     </button>
                   </div>
 
