@@ -15,7 +15,7 @@ const navigation = [
   { name: "動画一覧", href: "/videos", icon: "🎬" },
   { name: "キーワード検索", href: "/keywords", icon: "🔎" },
   { name: "ナレッジ", href: "/knowledge", icon: "📚" },
-  { name: "ナレッジ追加", href: "/knowledge/upload", icon: "➕" },
+  { name: "知識を追加", href: "/knowledge/upload", icon: "➕" },
   { name: "サムネ分析", href: "/thumbnails", icon: "🖼" },
   { name: "プロジェクト", href: "/projects", icon: "📁" },
 ];
