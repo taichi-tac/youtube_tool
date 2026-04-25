@@ -128,6 +128,17 @@ export default function PipelinePage() {
   };
 
   // YouTube検索
+  const HISTORY_KEY = "yt_search_history";
+  const MAX_HISTORY = 20;
+
+  const loadHistory = (): string[] => {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
+  };
+  const saveToHistory = (query: string) => {
+    const prev = loadHistory().filter((q) => q !== query);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify([query, ...prev].slice(0, MAX_HISTORY)));
+  };
+
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOrder, setSearchOrder] = useState("relevance");
@@ -135,24 +146,40 @@ export default function PipelinePage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<VideoResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    return loadHistory();
+  });
+  const [showHistory, setShowHistory] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+  const handleSearch = async (query?: string) => {
+    const q = (query ?? searchQuery).trim();
+    if (!q) return;
+    if (query) setSearchQuery(query);
+    setShowHistory(false);
     setSearchLoading(true);
     setSearchError(null);
     try {
       const pid = await getProjectId();
       const data = await apiClient.post<VideoResult[]>(`/api/v1/videos/${pid}/search`, {
-        query: searchQuery.trim(),
+        query: q,
         max_results: searchMaxResults,
         order: searchOrder,
       });
       setSearchResults(data);
+      saveToHistory(q);
+      setSearchHistory(loadHistory());
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "検索に失敗しました");
     } finally {
       setSearchLoading(false);
     }
+  };
+
+  const deleteHistory = (item: string) => {
+    const updated = loadHistory().filter((q) => q !== item);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+    setSearchHistory(updated);
   };
 
   const copyUrl = (videoId: string) => {
@@ -475,14 +502,32 @@ export default function PipelinePage() {
         </p>
 
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[200px]">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setShowHistory(true)}
+              onBlur={() => setTimeout(() => setShowHistory(false), 150)}
               placeholder="検索キーワードを入力..."
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
+            {showHistory && searchHistory.length > 0 && (
+              <ul className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                <li className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">検索履歴</li>
+                {searchHistory.map((item) => (
+                  <li key={item} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                    onMouseDown={() => handleSearch(item)}>
+                    <span className="text-sm text-gray-700 truncate">{item}</span>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => { e.stopPropagation(); deleteHistory(item); }}
+                      className="ml-2 flex-shrink-0 text-gray-300 hover:text-red-400 text-xs"
+                    >✕</button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <select
             value={searchOrder}
