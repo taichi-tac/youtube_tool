@@ -130,6 +130,14 @@ export default function PipelinePage() {
   // YouTube検索
   const HISTORY_KEY = "yt_search_history";
   const MAX_HISTORY = 20;
+  const RESULTS_HISTORY_KEY = "yt_search_results_history";
+  const MAX_RESULTS_HISTORY = 10;
+
+  interface SearchSession {
+    keyword: string;
+    timestamp: string;
+    results: VideoResult[];
+  }
 
   const loadHistory = (): string[] => {
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
@@ -137,6 +145,15 @@ export default function PipelinePage() {
   const saveToHistory = (query: string) => {
     const prev = loadHistory().filter((q) => q !== query);
     localStorage.setItem(HISTORY_KEY, JSON.stringify([query, ...prev].slice(0, MAX_HISTORY)));
+  };
+
+  const loadResultsHistory = (): SearchSession[] => {
+    try { return JSON.parse(localStorage.getItem(RESULTS_HISTORY_KEY) || "[]"); } catch { return []; }
+  };
+  const saveResultsHistory = (keyword: string, results: VideoResult[]) => {
+    const prev = loadResultsHistory().filter((s) => s.keyword !== keyword);
+    const session: SearchSession = { keyword, timestamp: new Date().toISOString(), results };
+    localStorage.setItem(RESULTS_HISTORY_KEY, JSON.stringify([session, ...prev].slice(0, MAX_RESULTS_HISTORY)));
   };
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -151,6 +168,11 @@ export default function PipelinePage() {
     return loadHistory();
   });
   const [showHistory, setShowHistory] = useState(false);
+  const [searchResultsHistory, setSearchResultsHistory] = useState<SearchSession[]>(() => {
+    if (typeof window === "undefined") return [];
+    return loadResultsHistory();
+  });
+  const [openSession, setOpenSession] = useState<string | null>(null);
 
   const handleSearch = async (query?: string) => {
     const q = (query ?? searchQuery).trim();
@@ -169,6 +191,8 @@ export default function PipelinePage() {
       setSearchResults(data);
       saveToHistory(q);
       setSearchHistory(loadHistory());
+      saveResultsHistory(q, data);
+      setSearchResultsHistory(loadResultsHistory());
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "検索に失敗しました");
     } finally {
@@ -692,6 +716,76 @@ export default function PipelinePage() {
           );
         })()}
       </div>
+
+      {/* 検索結果履歴 */}
+      {searchResultsHistory.length > 0 && (
+        <div className="mt-10 border-t pt-6">
+          <h3 className="mb-4 text-base font-semibold text-gray-700">検索結果履歴</h3>
+          <div className="space-y-2">
+            {searchResultsHistory.map((session) => {
+              const isOpen = openSession === session.keyword;
+              const d = new Date(session.timestamp);
+              const label = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+              return (
+                <div key={session.keyword} className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                  <button
+                    className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                    onClick={() => setOpenSession(isOpen ? null : session.keyword)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-gray-800">🔍 {session.keyword}</span>
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{session.results.length}件</span>
+                      <span className="text-xs text-gray-400">{label}</span>
+                    </div>
+                    <span className="text-gray-400 text-sm">{isOpen ? "▲" : "▼"}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="border-t px-4 pb-4 pt-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {session.results.map((v) => {
+                          const engRate = v.view_count ? (((v.like_count || 0) + (v.comment_count || 0)) / v.view_count * 100) : 0;
+                          return (
+                            <div key={v.id} className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                              {v.thumbnail_url && (
+                                <a href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`} target="_blank" rel="noopener noreferrer">
+                                  <img src={v.thumbnail_url} alt="" className="w-full h-36 object-cover" />
+                                </a>
+                              )}
+                              <div className="p-3">
+                                <a
+                                  href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`}
+                                  target="_blank" rel="noopener noreferrer"
+                                  className="text-sm font-semibold text-gray-900 hover:text-blue-600 line-clamp-2"
+                                >
+                                  {v.title}
+                                </a>
+                                <p className="mt-1 text-xs text-gray-500">{v.channel_title || "-"}</p>
+                                <div className="mt-2 flex gap-3 text-xs text-gray-500">
+                                  <span>再生: {v.view_count != null ? v.view_count.toLocaleString() : "-"}</span>
+                                  <span>ENG: {engRate.toFixed(2)}%</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 border-t p-2">
+                                <button
+                                  onClick={() => addToUrls(v.youtube_video_id)}
+                                  disabled={!urls.some((u) => !u.trim())}
+                                  className="flex-1 rounded-lg bg-purple-600 py-1.5 text-center text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  分析対象に追加
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
