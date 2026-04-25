@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
 
+    # === 管理者 ===
+    ADMIN_EMAILS: str = ""  # カンマ区切り: "admin@example.com,admin2@example.com"
+
     # === Redis (オプション) ===
     REDIS_URL: Optional[str] = None
 

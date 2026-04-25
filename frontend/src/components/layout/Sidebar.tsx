@@ -14,6 +14,7 @@ const navigation = [
   { name: "ナレッジ", href: "/knowledge", icon: "📚" },
   { name: "知識を追加", href: "/knowledge/upload", icon: "➕" },
   { name: "プロジェクト", href: "/projects", icon: "📁" },
+  { name: "管理者", href: "/admin", icon: "🔐" },
 ];
 
 export default function Sidebar() {

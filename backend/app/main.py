@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import concept, content, keywords, knowledge, models, pipeline, planning, projects, scripts, thumbnails, theories, videos
+from app.routers import admin, concept, content, keywords, knowledge, models, pipeline, planning, projects, scripts, thumbnails, theories, videos
 from app.utils.cache import close_redis
 
 
@@ -62,6 +62,7 @@ app.add_middleware(
 # === ルーター登録（/api/v1 プレフィックス） ===
 API_V1_PREFIX = "/api/v1"
 
+app.include_router(admin.router, prefix=API_V1_PREFIX)
 app.include_router(concept.router, prefix=API_V1_PREFIX)
 app.include_router(projects.router, prefix=API_V1_PREFIX)
 app.include_router(keywords.router, prefix=API_V1_PREFIX)
