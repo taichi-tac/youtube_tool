@@ -550,7 +550,7 @@ export default function PipelinePage() {
             <option value={50}>50件</option>
           </select>
           <button
-            onClick={handleSearch}
+            onClick={() => handleSearch()}
             disabled={searchLoading || !searchQuery.trim()}
             className="rounded-lg bg-gradient-to-r from-green-600 to-teal-600 px-6 py-2.5 text-sm font-bold text-white hover:from-green-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
