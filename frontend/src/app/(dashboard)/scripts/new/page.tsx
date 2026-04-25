@@ -397,7 +397,7 @@ export default function ScriptNewPage() {
                   onChange={(e) => setUseRag(e.target.checked)}
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-sm font-medium text-gray-700">和理論ナレッジを参照</span>
+                <span className="text-sm font-medium text-gray-700">ずらし理論ナレッジを参照</span>
               </label>
 
               {/* モデル選択 */}
@@ -406,7 +406,7 @@ export default function ScriptNewPage() {
                   <label className="mb-1 block text-sm font-medium text-gray-700">ナレッジモデルを選択</label>
                   <select value={modelId} onChange={(e) => setModelId(e.target.value)}
                     className="w-full rounded-lg border px-4 py-2.5 text-sm bg-white focus:border-blue-500 focus:outline-none">
-                    <option value="">モデルなし（和理論のみ）</option>
+                    <option value="">モデルなし（ずらし理論のみ）</option>
                     {knowledgeModels.map((m) => (
                       <option key={m.id} value={m.id}>{m.name}</option>
                     ))}

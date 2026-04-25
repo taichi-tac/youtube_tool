@@ -121,7 +121,7 @@ export default function KnowledgePage() {
       )}
 
       <div className="mt-8 rounded-lg bg-gray-50 p-4">
-        <p className="text-xs text-gray-500">💡 和理論ナレッジ（192チャンク）は全モデル共通で台本生成時に常に参照されます。</p>
+        <p className="text-xs text-gray-500">💡 ずらし理論ナレッジ（192チャンク）は全モデル共通で台本生成時に常に参照されます。</p>
       </div>
     </div>
   );
