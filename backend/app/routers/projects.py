@@ -213,6 +213,7 @@ class ProfileUpdate(BaseModel):
     strengths: str | None = None
     content_style: str | None = None
     youtube_api_key: str | None = None
+    anthropic_api_key: str | None = None
 
 
 @router.get("/{project_id}/profile")

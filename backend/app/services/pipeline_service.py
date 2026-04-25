@@ -17,7 +17,7 @@ from app.services.rag_service import get_rag_context
 logger = logging.getLogger(__name__)
 
 
-async def analyze_video_structure(video_urls: list[str]) -> dict[str, Any]:
+async def analyze_video_structure(video_urls: list[str], anthropic_api_key: Optional[str] = None) -> dict[str, Any]:
     """
     複数の伸びてる動画のURLから共通構造を分析する。
 
@@ -25,7 +25,7 @@ async def analyze_video_structure(video_urls: list[str]) -> dict[str, Any]:
     2. 字幕/説明文から台本構造を推定
     3. 共通パターンを抽出
     """
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    client = anthropic.AsyncAnthropic(api_key=anthropic_api_key or settings.ANTHROPIC_API_KEY)
 
     # YouTube動画IDを抽出
     video_ids = []
@@ -111,12 +111,13 @@ async def pipeline_to_script(
     profile: dict[str, Any],
     db: Any = None,
     project_id: str | None = None,
+    anthropic_api_key: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     伸びてる動画URL → 構造分析 → 企画提案 → 台本ドラフト生成の一気通貫パイプライン。
     """
     # Step 1: 動画構造分析
-    analysis = await analyze_video_structure(video_urls)
+    analysis = await analyze_video_structure(video_urls, anthropic_api_key=anthropic_api_key)
     if "error" in analysis:
         return analysis
 
@@ -150,9 +151,10 @@ async def regenerate_persona(
     concept: str,
     current_target: str = "",
     current_inner_voice: str = "",
+    anthropic_api_key: Optional[str] = None,
 ) -> dict[str, Any]:
     """企画のペルソナと心の声を再生成する。"""
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    client = anthropic.AsyncAnthropic(api_key=anthropic_api_key or settings.ANTHROPIC_API_KEY)
 
     prompt = f"""以下のYouTube企画に対して、新しいペルソナ（ターゲット人物像）と心の声を生成してください。
 
@@ -217,9 +219,10 @@ async def regenerate_proposals(
     feedback: str,
     current_proposals: list[dict[str, Any]] | None = None,
     project_id: str | None = None,
+    anthropic_api_key: Optional[str] = None,
 ) -> dict[str, Any]:
     """フィードバックを反映して企画を出し直す。"""
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    client = anthropic.AsyncAnthropic(api_key=anthropic_api_key or settings.ANTHROPIC_API_KEY)
 
     # 動画情報を再取得
     video_ids = []

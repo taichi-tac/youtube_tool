@@ -34,8 +34,9 @@ export default function ConceptPage() {
   const [suggestedChannels, setSuggestedChannels] = useState<any[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
 
-  // YouTube API Key
+  // API Keys
   const [youtubeApiKey, setYoutubeApiKey] = useState("");
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
 
   // 既存プロファイル読み込み
   useEffect(() => {
@@ -53,6 +54,7 @@ export default function ConceptPage() {
             setLikeChannels(profile.benchmark_channels);
           }
           if (profile.youtube_api_key) setYoutubeApiKey(profile.youtube_api_key);
+          if (profile.anthropic_api_key) setAnthropicApiKey(profile.anthropic_api_key);
         }
       } catch { /* 新規ユーザー */ }
       finally { setLoading(false); }
@@ -126,6 +128,7 @@ export default function ConceptPage() {
         concept: conceptSuggestion,
         benchmark_channels: likeChannels.filter(c => c.trim()),
         youtube_api_key: youtubeApiKey || undefined,
+        anthropic_api_key: anthropicApiKey || undefined,
       });
       router.push("/pipeline");
     } catch (err) {
@@ -343,17 +346,31 @@ export default function ConceptPage() {
               {dislikeChannels.length < 10 && <button onClick={() => addChannel(dislikeChannels, setDislikeChannels)} className="text-xs text-blue-600 hover:underline">+ 追加</button>}
             </div>
 
-            {/* YouTube API Key */}
-            <div className="mt-6 rounded-lg border border-dashed border-gray-300 p-4">
-              <label className="mb-1 block text-sm font-medium text-gray-700">YouTube API Key（任意）</label>
-              <p className="mb-2 text-xs text-gray-400">
-                自分のAPIキーを設定すると、検索回数の制限が大幅に緩和されます（1日最大50件×100回）。
-                <a href="https://console.cloud.google.com/" target="_blank" rel="noopener" className="text-blue-500 underline ml-1">
-                  Google Cloud Consoleで取得
-                </a>
-              </p>
-              <input type="text" value={youtubeApiKey} onChange={(e) => setYoutubeApiKey(e.target.value)}
-                placeholder="AIzaSy..." className="w-full rounded-lg border px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
+            {/* API Keys */}
+            <div className="mt-6 space-y-4">
+              <div className="rounded-lg border border-orange-200 bg-orange-50 p-4">
+                <label className="mb-1 block text-sm font-semibold text-orange-800">Anthropic API Key（必須）</label>
+                <p className="mb-2 text-xs text-orange-700">
+                  台本生成・企画提案・コメント分析などAI機能すべてに使用します。
+                  <a href="https://console.anthropic.com/" target="_blank" rel="noopener" className="underline ml-1">
+                    Anthropic Consoleで取得
+                  </a>
+                </p>
+                <input type="password" value={anthropicApiKey} onChange={(e) => setAnthropicApiKey(e.target.value)}
+                  placeholder="sk-ant-..." className="w-full rounded-lg border border-orange-300 px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none bg-white" />
+              </div>
+
+              <div className="rounded-lg border border-dashed border-gray-300 p-4">
+                <label className="mb-1 block text-sm font-medium text-gray-700">YouTube API Key（任意）</label>
+                <p className="mb-2 text-xs text-gray-400">
+                  自分のAPIキーを設定すると、検索回数の制限が大幅に緩和されます。
+                  <a href="https://console.cloud.google.com/" target="_blank" rel="noopener" className="text-blue-500 underline ml-1">
+                    Google Cloud Consoleで取得
+                  </a>
+                </p>
+                <input type="text" value={youtubeApiKey} onChange={(e) => setYoutubeApiKey(e.target.value)}
+                  placeholder="AIzaSy..." className="w-full rounded-lg border px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
+              </div>
             </div>
 
             <div className="mt-6 flex justify-between">

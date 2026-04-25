@@ -72,10 +72,15 @@ async def full_pipeline(
         if result.data:
             profile = result.data[0]
 
+    from app.core.api_keys import fetch_project_keys, get_anthropic_key
+    project_keys = fetch_project_keys(project_id)
+    user_anthropic_key = get_anthropic_key(project_keys)
+
     pipeline_result = await pipeline_to_script(
         video_urls=body.video_urls,
         profile=profile,
         project_id=str(project_id),
+        anthropic_api_key=user_anthropic_key,
     )
 
     return pipeline_result
@@ -88,11 +93,14 @@ async def regenerate_persona_endpoint(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """企画のペルソナと心の声を再生成する"""
+    from app.core.api_keys import fetch_project_keys, get_anthropic_key
+    project_keys = fetch_project_keys(project_id)
     return await regenerate_persona(
         title=body.title,
         concept=body.concept,
         current_target=body.current_target,
         current_inner_voice=body.current_inner_voice,
+        anthropic_api_key=get_anthropic_key(project_keys),
     )
 
 
@@ -127,11 +135,14 @@ async def regenerate_proposals_endpoint(
     except Exception:
         pass  # ナレッジ保存失敗は企画再生成をブロックしない
 
+    from app.core.api_keys import fetch_project_keys, get_anthropic_key
+    project_keys = fetch_project_keys(project_id)
     result = await regenerate_proposals(
         video_urls=body.video_urls,
         feedback=body.feedback,
         current_proposals=body.current_proposals,
         project_id=str(project_id),
+        anthropic_api_key=get_anthropic_key(project_keys),
     )
     result["feedback_saved"] = True
     return result

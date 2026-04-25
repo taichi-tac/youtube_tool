@@ -21,6 +21,7 @@ async def generate_script_stream(
     additional_context: Optional[str] = None,
     rag_context: Optional[str] = None,
     comment_insights: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """
     Claude APIを使用して台本をストリーミング生成する。
@@ -40,7 +41,8 @@ async def generate_script_stream(
         comment_insights=comment_insights,
     )
 
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    from app.core.config import settings as _settings
+    client = anthropic.AsyncAnthropic(api_key=anthropic_api_key or _settings.ANTHROPIC_API_KEY)
 
     # ストリーミングで台本生成（和理論ベース: 30,000文字以上の台本生成に対応）
     async with client.messages.stream(

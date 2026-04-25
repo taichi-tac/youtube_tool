@@ -101,6 +101,11 @@ async def generate_script_sse(
     Claude APIで台本をSSEストリーミング生成する。
     クライアントはServer-Sent Eventsとして受信する。
     """
+    # プロジェクトのAPIキーを取得
+    from app.core.api_keys import fetch_project_keys, get_anthropic_key
+    project_keys = fetch_project_keys(project_id)
+    user_anthropic_key = get_anthropic_key(project_keys)
+
     # モデルナレッジ取得（オプション）
     model_context = None
     if body.model_id and use_supabase_sdk():
@@ -152,6 +157,7 @@ async def generate_script_sse(
                     uniqueness=body.uniqueness,
                     additional_context=(body.additional_context or "") + ("\n\n" + model_context if model_context else ""),
                     rag_context=rag_context,
+                    anthropic_api_key=user_anthropic_key,
                 ):
                     full_text.append(chunk)
                     yield {
@@ -236,6 +242,7 @@ async def generate_script_sse(
                 uniqueness=body.uniqueness,
                 additional_context=body.additional_context,
                 rag_context=rag_context,
+                anthropic_api_key=user_anthropic_key,
             ):
                 full_text.append(chunk)
                 yield {
