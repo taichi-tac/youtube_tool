@@ -11,12 +11,8 @@ const navigation = [
   { name: "STEP3 企画提案", href: "/planning", icon: "🎯" },
   { name: "STEP4 台本生成", href: "/scripts/new", icon: "✨" },
   { name: "台本一覧", href: "/scripts", icon: "📝" },
-  { name: "コンテンツ工房", href: "/content", icon: "🔧" },
-  { name: "動画一覧", href: "/videos", icon: "🎬" },
-  { name: "キーワード検索", href: "/keywords", icon: "🔎" },
   { name: "ナレッジ", href: "/knowledge", icon: "📚" },
   { name: "知識を追加", href: "/knowledge/upload", icon: "➕" },
-  { name: "サムネ分析", href: "/thumbnails", icon: "🖼" },
   { name: "プロジェクト", href: "/projects", icon: "📁" },
 ];
 
