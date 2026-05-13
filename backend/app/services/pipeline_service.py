@@ -81,29 +81,40 @@ JSON形式で返してください:
   ]
 }}"""
 
-    try:
-        response = await client.messages.create(
+    async def _call_claude(api_key: Optional[str]) -> dict:
+        c = anthropic.AsyncAnthropic(api_key=api_key or settings.ANTHROPIC_API_KEY)
+        response = await c.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
-
         text = response.content[0].text
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
         elif "```" in text:
             text = text.split("```")[1].split("```")[0]
+        return json.loads(text.strip())
 
-        result = json.loads(text.strip())
-        result["analyzed_videos"] = [
-            {"id": d.get("youtube_video_id"), "title": d.get("title"), "view_count": d.get("view_count")}
-            for d in details
-        ]
-        return result
-
+    try:
+        result = await _call_claude(anthropic_api_key)
     except Exception as e:
-        logger.error(f"動画構造分析エラー: {e}")
-        return {"error": str(e)}
+        # ユーザーキーで失敗した場合はシステムキーにフォールバック
+        if anthropic_api_key and anthropic_api_key != settings.ANTHROPIC_API_KEY:
+            logger.warning(f"ユーザーAnthropicキーで失敗、システムキーで再試行: {e}")
+            try:
+                result = await _call_claude(None)
+            except Exception as e2:
+                logger.error(f"動画構造分析エラー: {e2}")
+                return {"error": str(e2)}
+        else:
+            logger.error(f"動画構造分析エラー: {e}")
+            return {"error": str(e)}
+
+    result["analyzed_videos"] = [
+        {"id": d.get("youtube_video_id"), "title": d.get("title"), "view_count": d.get("view_count")}
+        for d in details
+    ]
+    return result
 
 
 async def pipeline_to_script(
