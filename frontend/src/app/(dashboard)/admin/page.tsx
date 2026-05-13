@@ -11,6 +11,9 @@ interface AdminUser {
   last_sign_in_at: string | null;
   email_confirmed_at: string | null;
   is_banned: boolean;
+  project_name: string | null;
+  has_anthropic_key: boolean;
+  has_youtube_key: boolean;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -87,9 +90,11 @@ export default function AdminPage() {
               <thead className="border-b border-gray-200 bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">メールアドレス</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">プロジェクト</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">Anthropicキー</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">YouTubeキー</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">登録日</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">最終ログイン</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">メール確認</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">状態</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">操作</th>
                 </tr>
@@ -98,6 +103,17 @@ export default function AdminPage() {
                 {users.map((u) => (
                   <tr key={u.id} className={u.is_banned ? "bg-red-50" : "hover:bg-gray-50"}>
                     <td className="px-4 py-3 font-medium text-gray-900">{u.email}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{u.project_name ?? <span className="text-gray-300">未作成</span>}</td>
+                    <td className="px-4 py-3">
+                      {u.has_anthropic_key
+                        ? <span className="text-green-600 text-xs font-medium">登録済</span>
+                        : <span className="text-red-400 text-xs font-medium">未登録</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.has_youtube_key
+                        ? <span className="text-green-600 text-xs font-medium">登録済</span>
+                        : <span className="text-red-400 text-xs font-medium">未登録</span>}
+                    </td>
                     <td className="px-4 py-3 text-gray-500">{formatDate(u.created_at)}</td>
                     <td className="px-4 py-3 text-gray-500">{formatDate(u.last_sign_in_at)}</td>
                     <td className="px-4 py-3">

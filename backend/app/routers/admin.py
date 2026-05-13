@@ -51,16 +51,39 @@ async def list_users(
         data = resp.json()
 
     users = data.get("users", [])
+
+    # プロジェクトのAPIキー登録状況を取得
+    from app.core.database import get_supabase, use_supabase_sdk
+    projects_by_user: dict[str, dict] = {}
+    if use_supabase_sdk():
+        try:
+            sb = get_supabase()
+            user_ids = [u.get("id") for u in users if u.get("id")]
+            proj_result = sb.table("projects").select(
+                "user_id,name,anthropic_api_key,youtube_api_key"
+            ).in_("user_id", user_ids).execute()
+            for p in (proj_result.data or []):
+                uid = p.get("user_id")
+                if uid and uid not in projects_by_user:
+                    projects_by_user[uid] = p
+        except Exception:
+            pass
+
     result = []
     for u in users:
+        uid = u.get("id")
+        proj = projects_by_user.get(uid, {})
         result.append({
-            "id": u.get("id"),
+            "id": uid,
             "email": u.get("email"),
             "created_at": u.get("created_at"),
             "last_sign_in_at": u.get("last_sign_in_at"),
             "banned_until": u.get("banned_until"),
             "is_banned": bool(u.get("banned_until")),
             "email_confirmed_at": u.get("email_confirmed_at"),
+            "project_name": proj.get("name"),
+            "has_anthropic_key": bool(proj.get("anthropic_api_key")),
+            "has_youtube_key": bool(proj.get("youtube_api_key")),
         })
 
     return {"users": result, "total": data.get("total", len(result))}
