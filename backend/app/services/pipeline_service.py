@@ -17,7 +17,7 @@ from app.services.rag_service import get_rag_context
 logger = logging.getLogger(__name__)
 
 
-async def analyze_video_structure(video_urls: list[str], anthropic_api_key: Optional[str] = None) -> dict[str, Any]:
+async def analyze_video_structure(video_urls: list[str], anthropic_api_key: Optional[str] = None, youtube_api_key: Optional[str] = None) -> dict[str, Any]:
     """
     複数の伸びてる動画のURLから共通構造を分析する。
 
@@ -39,7 +39,7 @@ async def analyze_video_structure(video_urls: list[str], anthropic_api_key: Opti
 
     # YouTube Data APIで動画情報取得
     from app.services.youtube_service import get_video_details
-    details = await get_video_details(video_ids)
+    details = await get_video_details(video_ids, api_key=youtube_api_key or None)
 
     if not details:
         return {"error": "動画情報を取得できませんでした"}
@@ -112,12 +112,13 @@ async def pipeline_to_script(
     db: Any = None,
     project_id: str | None = None,
     anthropic_api_key: Optional[str] = None,
+    youtube_api_key: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     伸びてる動画URL → 構造分析 → 企画提案 → 台本ドラフト生成の一気通貫パイプライン。
     """
     # Step 1: 動画構造分析
-    analysis = await analyze_video_structure(video_urls, anthropic_api_key=anthropic_api_key)
+    analysis = await analyze_video_structure(video_urls, anthropic_api_key=anthropic_api_key, youtube_api_key=youtube_api_key)
     if "error" in analysis:
         return analysis
 

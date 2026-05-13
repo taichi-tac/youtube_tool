@@ -72,15 +72,15 @@ async def full_pipeline(
         if result.data:
             profile = result.data[0]
 
-    from app.core.api_keys import fetch_project_keys, get_anthropic_key
+    from app.core.api_keys import fetch_project_keys, get_anthropic_key, get_youtube_key
     project_keys = fetch_project_keys(project_id)
-    user_anthropic_key = get_anthropic_key(project_keys)
 
     pipeline_result = await pipeline_to_script(
         video_urls=body.video_urls,
         profile=profile,
         project_id=str(project_id),
-        anthropic_api_key=user_anthropic_key,
+        anthropic_api_key=get_anthropic_key(project_keys),
+        youtube_api_key=get_youtube_key(project_keys),
     )
 
     return pipeline_result
