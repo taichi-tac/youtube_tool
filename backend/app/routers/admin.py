@@ -59,15 +59,16 @@ async def list_users(
         try:
             sb = get_supabase()
             user_ids = [u.get("id") for u in users if u.get("id")]
-            proj_result = sb.table("projects").select(
-                "user_id,name,anthropic_api_key,youtube_api_key"
-            ).in_("user_id", user_ids).execute()
-            for p in (proj_result.data or []):
-                uid = p.get("user_id")
-                if uid and uid not in projects_by_user:
-                    projects_by_user[uid] = p
-        except Exception:
-            pass
+            if user_ids:
+                proj_result = sb.table("projects").select(
+                    "user_id,name,anthropic_api_key,youtube_api_key"
+                ).in_("user_id", user_ids).execute()
+                for p in (proj_result.data or []):
+                    uid = p.get("user_id")
+                    if uid and uid not in projects_by_user:
+                        projects_by_user[uid] = p
+        except Exception as e:
+            logger.error(f"管理者: プロジェクトキー取得エラー: {e}")
 
     result = []
     for u in users:
