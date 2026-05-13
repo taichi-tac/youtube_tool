@@ -243,6 +243,11 @@ export default function PipelinePage() {
       const data = await apiClient.post<any>(`/api/v1/pipeline/${pid}/full`, {
         video_urls: validUrls,
       });
+      if (data?.error) {
+        setError(data.error);
+        setStep("input");
+        return;
+      }
       setResult(data);
       setStep("result");
     } catch (err) {
