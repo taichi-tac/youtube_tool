@@ -52,43 +52,45 @@ async def list_users(
 
     users = data.get("users", [])
 
-    # プロジェクトのAPIキー登録状況を取得
-    # auth.users.id → public.users.id → projects の順で解決する
+    # プロジェクトのAPIキー登録状況を取得（email経由で結合）
     from app.core.database import get_supabase, use_supabase_sdk
-    projects_by_user: dict[str, dict] = {}  # auth_id -> project
+    projects_by_auth_id: dict[str, dict] = {}  # auth_id -> project
     if use_supabase_sdk():
         try:
             sb = get_supabase()
-            auth_ids = [u.get("id") for u in users if u.get("id")]
-            if auth_ids:
-                # auth_id → internal user id の変換
-                users_result = sb.table("users").select("id,auth_id").in_("auth_id", auth_ids).execute()
-                auth_to_internal = {r["auth_id"]: r["id"] for r in (users_result.data or [])}
+            emails = [u.get("email") for u in users if u.get("email")]
+            if emails:
+                # email → internal users.id の変換
+                users_result = sb.table("users").select("id,email").in_("email", emails).execute()
+                logger.info(f"管理者: usersテーブル取得 {len(users_result.data or [])}件")
+                email_to_internal = {r["email"]: r["id"] for r in (users_result.data or [])}
 
-                internal_ids = list(auth_to_internal.values())
+                internal_ids = list(email_to_internal.values())
                 if internal_ids:
                     proj_result = sb.table("projects").select(
                         "user_id,name,anthropic_api_key,youtube_api_key"
                     ).in_("user_id", internal_ids).execute()
+                    logger.info(f"管理者: projectsテーブル取得 {len(proj_result.data or [])}件")
 
-                    # internal user_id -> project
                     projects_by_internal: dict[str, dict] = {}
                     for p in (proj_result.data or []):
                         iid = p.get("user_id")
                         if iid and iid not in projects_by_internal:
                             projects_by_internal[iid] = p
 
-                    # auth_id -> project に変換
-                    for auth_id, internal_id in auth_to_internal.items():
-                        if internal_id in projects_by_internal:
-                            projects_by_user[auth_id] = projects_by_internal[internal_id]
+                    # email -> auth_id マップ
+                    auth_id_by_email = {u.get("email"): u.get("id") for u in users if u.get("email")}
+                    for email, internal_id in email_to_internal.items():
+                        auth_id = auth_id_by_email.get(email)
+                        if auth_id and internal_id in projects_by_internal:
+                            projects_by_auth_id[auth_id] = projects_by_internal[internal_id]
         except Exception as e:
             logger.error(f"管理者: プロジェクトキー取得エラー: {e}")
 
     result = []
     for u in users:
         uid = u.get("id")
-        proj = projects_by_user.get(uid, {})
+        proj = projects_by_auth_id.get(uid, {})
         result.append({
             "id": uid,
             "email": u.get("email"),
