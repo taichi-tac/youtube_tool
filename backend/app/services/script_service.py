@@ -44,10 +44,10 @@ async def generate_script_stream(
     from app.core.config import settings as _settings
     client = anthropic.AsyncAnthropic(api_key=anthropic_api_key or _settings.ANTHROPIC_API_KEY)
 
-    # ストリーミングで台本生成（和理論ベース: 30,000文字以上の台本生成に対応）
+    # ストリーミングで台本生成
     async with client.messages.stream(
         model="claude-sonnet-4-5",
-        max_tokens=64000,
+        max_tokens=16000,
         system=system_prompt,
         messages=[
             {"role": "user", "content": user_prompt},
