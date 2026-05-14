@@ -340,6 +340,134 @@ JSON内の改行は \\n で表現してください。
     return system_prompt, "\n".join(user_prompt_parts)
 
 
+def build_section_prompts(
+    title: str,
+    target_viewer: str = "一般視聴者",
+    viewer_problem: Optional[str] = None,
+    promise: Optional[str] = None,
+    uniqueness: Optional[str] = None,
+    additional_context: Optional[str] = None,
+    rag_context: Optional[str] = None,
+    comment_insights: Optional[str] = None,
+    hook_chars: int = 450,
+    body_chars: int = 3600,
+    closing_chars: int = 450,
+) -> tuple[tuple[str, str], tuple[str, str], tuple[str, str]]:
+    """
+    hook / body / closing を並行生成するための3セクション分のプロンプトペアを返す。
+    各セクションは独立したAPI呼び出しで生成されるため、プレーンテキスト出力を指示する。
+
+    Returns:
+        ((hook_system, hook_user), (body_system, body_user), (closing_system, closing_user))
+    """
+
+    def _ctx() -> str:
+        parts = [
+            f"【動画タイトル】{title}",
+            f"【ターゲット視聴者】{target_viewer}",
+        ]
+        if viewer_problem:
+            parts.append(f"【視聴者の悩み】{viewer_problem}")
+        if promise:
+            parts.append(f"【約束・ベネフィット】{promise}")
+        if uniqueness:
+            parts.append(f"【独自性・差別化】{uniqueness}")
+        if additional_context:
+            parts.append(f"【追加コンテキスト】{additional_context}")
+        if rag_context:
+            parts.append(f"【参考ナレッジ】\n{rag_context}")
+        if comment_insights:
+            parts.append(f"【視聴者コメント分析】\n{comment_insights}")
+        return "\n".join(parts)
+
+    ctx = _ctx()
+
+    # ── HOOK ──
+    hook_system = """あなたは「和理論」を体得したYouTube台本ライターです。
+台本の【冒頭フック（hook）】パートのみを執筆します。
+
+■ hookの構成（この順で書く）
+1. 衝撃の問題提起（視聴者の手を止める1文）
+2. 視聴者の痛みへの共感
+3. 約束のチラ見せ（「この動画を見れば○○がわかります」）
+4. 動画の道筋提示
+
+■ 文体
+- 口語体・話し言葉
+- 【間: 2秒】【テロップ: ○○】等の演出指示を要所に入れる
+- 視聴者の内心の声を代弁する
+
+■ 出力形式
+- プレーンテキストのみ（JSON・Markdown見出し・前書き・後書き 一切不要）
+- 指定文字数以内に収めること"""
+
+    hook_user = (
+        f"{ctx}\n\n"
+        f"上記の動画の【冒頭フック（hook）】のみを、約{hook_chars}文字以内で書いてください。\n"
+        "プレーンテキストのみ出力してください。"
+    )
+
+    # ── BODY ──
+    body_system = f"""あなたは「和理論」を体得したYouTube台本ライターです。
+台本の【本編（body）】パートのみを執筆します。
+
+■ bodyの構成
+(a) 誤解の名指し（全体の約16%）
+    - 視聴者が信じている「古い判断軸」を名指しして崩す
+(b) メイン切り替え／センターピン（全体の約40%）
+    - 新しい判断軸を1つ提示。ストーリー・具体例・データで納得させる
+    - 「明日から使える」レベルまで具体化する
+(c) サブ切り替え（全体の約26%、1〜3個）
+    - メインを補強する気づき。2〜3分おきにミニフックを入れる
+
+■ 文体
+- 口語体・話し言葉
+- 【間: 2秒】【テロップ: ○○】等の演出指示を要所に入れる
+- ## または ### で各サブセクションを区切る
+- タイトルに数値がある場合（N選・N個等）は必ずその数だけ項目を解説すること
+
+■ 出力形式
+- プレーンテキストのみ（JSON・前書き・後書き 一切不要）
+- 約{body_chars}文字以内に収めること"""
+
+    body_user = (
+        f"{ctx}\n\n"
+        f"上記の動画の【本編（body）】のみを、約{body_chars}文字以内で書いてください。\n"
+        "プレーンテキストのみ出力してください。"
+    )
+
+    # ── CLOSING ──
+    closing_system = """あなたは「和理論」を体得したYouTube台本ライターです。
+台本の【クロージング（closing）】パートのみを執筆します。
+
+■ closingの構成
+1. タイトルの約束の明示的な回収（「冒頭でお伝えした○○、その答えがこれです」）
+2. 本編の要点を3行以内で要約
+3. 視聴者の「次の一歩」を具体的に提示
+4. CTA（チャンネル登録・高評価・コメント）を自然に組み込む
+5. 余韻を残す締めの1文
+
+■ 文体
+- 口語体・話し言葉
+- 押しつけがましくなく自然なCTA
+
+■ 出力形式
+- プレーンテキストのみ（JSON・前書き・後書き 一切不要）
+- 指定文字数以内に収めること"""
+
+    closing_user = (
+        f"{ctx}\n\n"
+        f"上記の動画の【クロージング（closing）】のみを、約{closing_chars}文字以内で書いてください。\n"
+        "プレーンテキストのみ出力してください。"
+    )
+
+    return (
+        (hook_system, hook_user),
+        (body_system, body_user),
+        (closing_system, closing_user),
+    )
+
+
 def build_analysis_prompt(
     video_title: str,
     video_description: str,

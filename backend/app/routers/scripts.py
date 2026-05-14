@@ -17,7 +17,7 @@ from app.core.security import get_current_user
 from app.models.models import Script
 from app.schemas.schemas import ScriptCreate, ScriptGenerateRequest, ScriptResponse, ScriptUpdate
 from app.services.rag_service import get_rag_context
-from app.services.script_service import generate_script_stream
+from app.services.script_service import generate_script_sections_parallel
 
 router = APIRouter(prefix="/scripts", tags=["台本"])
 
@@ -143,13 +143,12 @@ async def generate_script_sse(
 
         async def event_generator_supabase():
             """SSEイベント（Supabase SDK版）"""
-            full_text: list[str] = []
             yield {
                 "event": "start",
                 "data": json.dumps({"script_id": str(script_id)}, ensure_ascii=False),
             }
             try:
-                async for chunk in generate_script_stream(
+                hook_text, body_content, closing_text = await generate_script_sections_parallel(
                     title=body.title,
                     target_viewer=body.target_viewer,
                     viewer_problem=body.viewer_problem,
@@ -158,15 +157,14 @@ async def generate_script_sse(
                     additional_context=(body.additional_context or "") + ("\n\n" + model_context if model_context else ""),
                     rag_context=rag_context,
                     anthropic_api_key=user_anthropic_key,
-                ):
-                    full_text.append(chunk)
-                    yield {
-                        "event": "chunk",
-                        "data": json.dumps({"text": chunk}, ensure_ascii=False),
-                    }
+                )
 
-                full_body_text = "".join(full_text)
-                hook_text, body_content, closing_text = _parse_script_json(full_body_text)
+                combined = f"===HOOK===\n{hook_text}\n===BODY===\n{body_content}\n===CLOSING===\n{closing_text}"
+                yield {
+                    "event": "chunk",
+                    "data": json.dumps({"text": combined}, ensure_ascii=False),
+                }
+
                 total_word_count = len(hook_text or "") + len(body_content or "") + len(closing_text or "")
 
                 # DB保存
@@ -226,15 +224,13 @@ async def generate_script_sse(
 
     async def event_generator():
         """SSEイベントを生成するジェネレータ"""
-        full_text: list[str] = []
-
         yield {
             "event": "start",
             "data": json.dumps({"script_id": str(script_id)}, ensure_ascii=False),
         }
 
         try:
-            async for chunk in generate_script_stream(
+            hook_text, body_content, closing_text = await generate_script_sections_parallel(
                 title=body.title,
                 target_viewer=body.target_viewer,
                 viewer_problem=body.viewer_problem,
@@ -243,15 +239,14 @@ async def generate_script_sse(
                 additional_context=body.additional_context,
                 rag_context=rag_context,
                 anthropic_api_key=user_anthropic_key,
-            ):
-                full_text.append(chunk)
-                yield {
-                    "event": "chunk",
-                    "data": json.dumps({"text": chunk}, ensure_ascii=False),
-                }
+            )
 
-            full_body_text = "".join(full_text)
-            hook_text, body_content, closing_text = _parse_script_json(full_body_text)
+            combined = f"===HOOK===\n{hook_text}\n===BODY===\n{body_content}\n===CLOSING===\n{closing_text}"
+            yield {
+                "event": "chunk",
+                "data": json.dumps({"text": combined}, ensure_ascii=False),
+            }
+
             total_word_count = len(hook_text or "") + len(body_content or "") + len(closing_text or "")
 
             async with async_session_factory() as save_session:
