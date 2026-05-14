@@ -57,10 +57,12 @@ async def generate_script_stream(
     from app.core.config import settings as _settings
     client = anthropic.AsyncAnthropic(api_key=anthropic_api_key or _settings.ANTHROPIC_API_KEY)
 
-    # 尺から max_tokens を動的に計算（日本語1文字≒1.5トークン、50%バッファ＋JSON分1000）
+    # 尺から max_tokens をハードリミットとして計算
+    # 日本語1文字≒1トークン、10%バッファ+500（JSON構造分）
+    # Claudeはプロンプト指示を無視して超過するため、max_tokensで物理的に制限する
     duration_min = _parse_duration_from_context(additional_context)
     target_chars = duration_min * 300
-    max_tokens = int(target_chars * 1.5 * 1.5) + 1000  # 文字→トークン変換 × バッファ + JSON分
+    max_tokens = int(target_chars * 0.9) + 500
 
     # ストリーミングで台本生成
     async with client.messages.stream(
