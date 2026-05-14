@@ -183,12 +183,20 @@ async def generate_script_sse(
             # create_task で起動 → クライアント切断でもタスクは継続しDB保存まで完了する
             task = asyncio.create_task(_gen_and_save())
 
+            # 進捗ステップ: 10秒ごとに段階的に上げる (5→20→40→60→75→85→92→95...)
+            _progress_steps = [20, 40, 60, 75, 85, 92, 95]
+            _step_idx = 0
             try:
                 while not task.done():
                     try:
                         await asyncio.wait_for(asyncio.shield(task), timeout=10.0)
                     except asyncio.TimeoutError:
-                        yield {"event": "ping", "data": json.dumps({})}
+                        pct = _progress_steps[min(_step_idx, len(_progress_steps) - 1)]
+                        _step_idx += 1
+                        yield {
+                            "event": "progress",
+                            "data": json.dumps({"pct": pct}, ensure_ascii=False),
+                        }
             except asyncio.CancelledError:
                 # クライアント切断: タスクは継続、SSE側は終了
                 raise

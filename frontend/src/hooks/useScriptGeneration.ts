@@ -65,15 +65,15 @@ export function useScriptGeneration() {
               setProgress(5);
               break;
 
+            case "progress":
+              setProgress(parsed.pct ?? 50);
+              break;
+
             case "chunk":
               chunkCount++;
               totalCharsRef.current += (parsed.text || "").length;
               setStreamedText((prev) => prev + parsed.text);
               setCharCount(totalCharsRef.current);
-              const pct = target > 0
-                ? Math.min(99, Math.round((totalCharsRef.current / target) * 100))
-                : Math.min(99, 5 + chunkCount * 2);
-              setProgress(pct);
               break;
 
             case "done":
