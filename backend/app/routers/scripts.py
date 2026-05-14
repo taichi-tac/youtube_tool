@@ -318,7 +318,19 @@ def _parse_script_json(full_body_text: str):
         else:
             body_content = full_body_text
     except (json.JSONDecodeError, ValueError):
-        body_content = full_body_text
+        # JSONが途中で切れた場合: 正規表現で各フィールドを部分的に救出
+        import re
+        hook_m = re.search(r'"hook"\s*:\s*"(.*?)(?:"\s*,\s*"body"|$)', full_body_text, re.DOTALL)
+        body_m = re.search(r'"body"\s*:\s*"(.*?)(?:"\s*,\s*"closing"|$)', full_body_text, re.DOTALL)
+        closing_m = re.search(r'"closing"\s*:\s*"(.*?)(?:"\s*}|$)', full_body_text, re.DOTALL)
+
+        if hook_m or body_m or closing_m:
+            hook_text = hook_m.group(1).replace("\\n", "\n") if hook_m else ""
+            body_content = body_m.group(1).replace("\\n", "\n") if body_m else ""
+            closing_text = closing_m.group(1).replace("\\n", "\n") if closing_m else ""
+        else:
+            # 完全にパース不能な場合は全文をbodyに
+            body_content = full_body_text
 
     return hook_text, body_content, closing_text
 

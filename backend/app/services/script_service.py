@@ -62,7 +62,7 @@ async def generate_script_stream(
     # Claudeはプロンプト指示を無視して超過するため、max_tokensで物理的に制限する
     duration_min = _parse_duration_from_context(additional_context)
     target_chars = duration_min * 300
-    max_tokens = int(target_chars / 1.5)  # 日本語1文字≈1.5トークン
+    max_tokens = int(target_chars / 1.5) + 200  # 日本語1文字≈1.5トークン、JSON構造分200追加
 
     # ストリーミングで台本生成
     async with client.messages.stream(
