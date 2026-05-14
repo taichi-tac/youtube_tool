@@ -50,6 +50,7 @@ export function useScriptGeneration() {
       let chunkCount = 0;
       let receivedScriptId: string | null = null;
       let receivedDone = false;
+      let receivedError = false;
 
       for await (const { event, data } of apiClient.parseSSE(response)) {
         if (controller.signal.aborted) break;
@@ -85,6 +86,7 @@ export function useScriptGeneration() {
               break;
 
             case "error":
+              receivedError = true;
               setError(parsed.error || "台本生成中にエラーが発生しました");
               setGenerating(false);
               break;
@@ -94,8 +96,8 @@ export function useScriptGeneration() {
         }
       }
 
-      // ストリーム終了後、doneイベントが来なかった場合も完了扱い
-      if (!controller.signal.aborted && !receivedDone) {
+      // ストリーム終了後、doneイベントが来なかった場合も完了扱い（エラー時は遷移しない）
+      if (!controller.signal.aborted && !receivedDone && !receivedError) {
         setProgress(100);
         setDone(true);
         setGenerating(false);

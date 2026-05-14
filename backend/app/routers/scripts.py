@@ -203,7 +203,7 @@ async def generate_script_sse(
                     "data": json.dumps({"error": str(e)}, ensure_ascii=False),
                 }
 
-        return EventSourceResponse(event_generator_supabase())
+        return EventSourceResponse(event_generator_supabase(), ping=15)
 
     # SQLAlchemy path
     script = Script(
@@ -292,7 +292,7 @@ async def generate_script_sse(
                 "data": json.dumps({"error": str(e)}, ensure_ascii=False),
             }
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(event_generator(), ping=15)
 
 
 def _parse_script_json(full_body_text: str):
