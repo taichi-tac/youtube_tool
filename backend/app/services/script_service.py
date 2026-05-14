@@ -81,13 +81,52 @@ async def generate_script_sections_parallel(
         )
         return response.content[0].text
 
+    async def _extend(system: str, label: str, existing: str, actual: int, target: int) -> str:
+        """短すぎるセクションに追記する（1回リトライ）"""
+        shortage = target - actual
+        user = (
+            f"以下は【{label}】の内容です:\n\n{existing}\n\n"
+            f"---\n"
+            f"上記は約{actual}文字でした。目標は約{target}文字です。\n"
+            f"あと約{shortage}文字分、自然な続きを追記してください。\n"
+            f"追記部分のテキストのみ出力してください（前置き・説明は不要）。"
+        )
+        max_tokens = int(shortage / 1.5 * 1.2) + 100
+        response = await client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=max(max_tokens, 200),
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+        return response.content[0].text
+
+    # 第1パス: 3セクション並行生成
     hook_text, body_text, closing_text = await asyncio.gather(
         _gen(hook_sys, hook_usr, _to_tokens(hook_chars, 50)),
         _gen(body_sys, body_usr, _to_tokens(body_chars, 100)),
         _gen(closing_sys, closing_usr, _to_tokens(closing_chars, 50)),
     )
 
-    return hook_text, body_text, closing_text
+    # 第2パス: 85%未満のセクションを並行追記
+    RETRY_THRESHOLD = 0.85
+    sections = {
+        "hook":    {"text": hook_text,    "sys": hook_sys,    "target": hook_chars,    "label": "冒頭フック"},
+        "body":    {"text": body_text,    "sys": body_sys,    "target": body_chars,    "label": "本編"},
+        "closing": {"text": closing_text, "sys": closing_sys, "target": closing_chars, "label": "クロージング"},
+    }
+    retry_keys = [k for k, v in sections.items() if len(v["text"]) < v["target"] * RETRY_THRESHOLD]
+    if retry_keys:
+        extensions = await asyncio.gather(*[
+            _extend(
+                sections[k]["sys"], sections[k]["label"],
+                sections[k]["text"], len(sections[k]["text"]), sections[k]["target"],
+            )
+            for k in retry_keys
+        ])
+        for k, ext in zip(retry_keys, extensions):
+            sections[k]["text"] = sections[k]["text"] + "\n" + ext
+
+    return sections["hook"]["text"], sections["body"]["text"], sections["closing"]["text"]
 
 
 async def generate_script_stream(

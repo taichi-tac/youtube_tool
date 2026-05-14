@@ -403,7 +403,8 @@ def build_section_prompts(
 
     hook_user = (
         f"{ctx}\n\n"
-        f"上記の動画の【冒頭フック（hook）】のみを、約{hook_chars}文字以内で書いてください。\n"
+        f"上記の動画の【冒頭フック（hook）】のみを書いてください。\n"
+        f"目標文字数: 約{hook_chars}文字（最低{int(hook_chars * 0.9)}文字以上、短くなりすぎないこと）\n"
         "プレーンテキストのみ出力してください。"
     )
 
@@ -428,11 +429,12 @@ def build_section_prompts(
 
 ■ 出力形式
 - プレーンテキストのみ（JSON・前書き・後書き 一切不要）
-- 約{body_chars}文字以内に収めること"""
+- 目標文字数: 約{body_chars}文字（最低{int(body_chars * 0.9)}文字以上、短くなりすぎないこと）"""
 
     body_user = (
         f"{ctx}\n\n"
-        f"上記の動画の【本編（body）】のみを、約{body_chars}文字以内で書いてください。\n"
+        f"上記の動画の【本編（body）】のみを書いてください。\n"
+        f"目標文字数: 約{body_chars}文字（最低{int(body_chars * 0.9)}文字以上、短くなりすぎないこと）\n"
         "プレーンテキストのみ出力してください。"
     )
 
@@ -457,7 +459,8 @@ def build_section_prompts(
 
     closing_user = (
         f"{ctx}\n\n"
-        f"上記の動画の【クロージング（closing）】のみを、約{closing_chars}文字以内で書いてください。\n"
+        f"上記の動画の【クロージング（closing）】のみを書いてください。\n"
+        f"目標文字数: 約{closing_chars}文字（最低{int(closing_chars * 0.9)}文字以上、短くなりすぎないこと）\n"
         "プレーンテキストのみ出力してください。"
     )
 
