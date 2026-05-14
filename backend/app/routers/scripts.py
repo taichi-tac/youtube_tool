@@ -167,7 +167,7 @@ async def generate_script_sse(
 
                 total_word_count = len(hook_text or "") + len(body_content or "") + len(closing_text or "")
 
-                # DB保存
+                # DB保存 — 失敗したらエラーイベントを出し done は送らない
                 try:
                     sb_save = get_supabase()
                     sb_save.table("scripts").update({
@@ -177,8 +177,15 @@ async def generate_script_sse(
                         "word_count": total_word_count,
                         "status": "completed",
                     }).eq("id", str(script_id)).execute()
-                except Exception:
-                    pass
+                except Exception as db_err:
+                    yield {
+                        "event": "error",
+                        "data": json.dumps(
+                            {"error": f"DB保存エラー: {db_err}"},
+                            ensure_ascii=False,
+                        ),
+                    }
+                    return
 
                 yield {
                     "event": "done",
@@ -249,6 +256,7 @@ async def generate_script_sse(
 
             total_word_count = len(hook_text or "") + len(body_content or "") + len(closing_text or "")
 
+            db_save_ok = False
             async with async_session_factory() as save_session:
                 try:
                     stmt = select(Script).where(Script.id == script_id)
@@ -261,8 +269,19 @@ async def generate_script_sse(
                         db_script.word_count = total_word_count
                         db_script.status = "completed"
                         await save_session.commit()
-                except Exception:
+                        db_save_ok = True
+                except Exception as db_err:
                     await save_session.rollback()
+                    yield {
+                        "event": "error",
+                        "data": json.dumps(
+                            {"error": f"DB保存エラー: {db_err}"},
+                            ensure_ascii=False,
+                        ),
+                    }
+
+            if not db_save_ok:
+                return
 
             yield {
                 "event": "done",
