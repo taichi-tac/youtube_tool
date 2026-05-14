@@ -84,7 +84,7 @@ JSON形式で返してください:
     async def _call_claude(api_key: Optional[str]) -> dict:
         c = anthropic.AsyncAnthropic(api_key=api_key or settings.ANTHROPIC_API_KEY)
         response = await c.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -192,7 +192,7 @@ JSONのみ返してください。"""
 
     try:
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -301,7 +301,7 @@ JSONのみ返してください。"""
 
     try:
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )

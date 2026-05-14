@@ -89,7 +89,7 @@ async def analyze_thumbnail(image_url: str) -> dict[str, Any]:
     # Claude Vision API呼び出し
     client = _get_anthropic_client()
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",
         max_tokens=1024,
         messages=[
             {

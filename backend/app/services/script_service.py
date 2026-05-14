@@ -46,7 +46,7 @@ async def generate_script_stream(
 
     # ストリーミングで台本生成（和理論ベース: 30,000文字以上の台本生成に対応）
     async with client.messages.stream(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",
         max_tokens=64000,
         system=system_prompt,
         messages=[

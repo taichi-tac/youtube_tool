@@ -172,7 +172,7 @@ async def analyze_comments_with_llm(comments: list[dict[str, Any]]) -> list[dict
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",
         max_tokens=8000,
         system=system_prompt,
         messages=[

@@ -136,7 +136,7 @@ async def generate_script_sse(
             "viewer_problem": body.viewer_problem,
             "promise": body.promise,
             "uniqueness": body.uniqueness,
-            "generation_model": "claude-sonnet-4-20250514",
+            "generation_model": "claude-sonnet-4-5",
         }
         insert_result = sb.table("scripts").insert(script_data).execute()
         script_id = insert_result.data[0]["id"]
@@ -217,7 +217,7 @@ async def generate_script_sse(
         viewer_problem=body.viewer_problem,
         promise=body.promise,
         uniqueness=body.uniqueness,
-        generation_model="claude-sonnet-4-20250514",
+        generation_model="claude-sonnet-4-5",
     )
     db.add(script)
     await db.flush()
