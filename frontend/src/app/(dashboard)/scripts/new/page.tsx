@@ -494,7 +494,13 @@ export default function ScriptNewPage() {
               {generating && (
                 <div className="mb-4">
                   <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
-                    <span>生成中... {charCount.toLocaleString()} / {targetChars.toLocaleString()} 文字</span>
+                    <span>
+                      {progress < 20 ? "生成を開始しています..." :
+                       progress < 50 ? "hook を生成中..." :
+                       progress < 70 ? "body を生成中..." :
+                       progress < 88 ? "closing を生成中..." :
+                       "保存しています..."}
+                    </span>
                     <span>{progress}%</span>
                   </div>
                   <div className="h-3 w-full rounded-full bg-gray-200">
