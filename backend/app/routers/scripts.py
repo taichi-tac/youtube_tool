@@ -3,6 +3,7 @@
 台本のCRUD操作およびSSEストリーミング生成を提供する。
 """
 
+import asyncio
 import json
 import uuid
 from typing import Any
@@ -141,14 +142,10 @@ async def generate_script_sse(
         insert_result = sb.table("scripts").insert(script_data).execute()
         script_id = insert_result.data[0]["id"]
 
-        async def event_generator_supabase():
-            """SSEイベント（Supabase SDK版）"""
-            yield {
-                "event": "start",
-                "data": json.dumps({"script_id": str(script_id)}, ensure_ascii=False),
-            }
+        # 生成+保存を独立タスクとして定義（SSE接続が切れても必ず完了する）
+        async def _gen_and_save() -> tuple[str, str, str]:
             try:
-                hook_text, body_content, closing_text = await generate_script_sections_parallel(
+                hook, body_txt, closing = await generate_script_sections_parallel(
                     title=body.title,
                     target_viewer=body.target_viewer,
                     viewer_problem=body.viewer_problem,
@@ -158,57 +155,70 @@ async def generate_script_sse(
                     rag_context=rag_context,
                     anthropic_api_key=user_anthropic_key,
                 )
-
-                combined = f"===HOOK===\n{hook_text}\n===BODY===\n{body_content}\n===CLOSING===\n{closing_text}"
-                yield {
-                    "event": "chunk",
-                    "data": json.dumps({"text": combined}, ensure_ascii=False),
-                }
-
-                total_word_count = len(hook_text or "") + len(body_content or "") + len(closing_text or "")
-
-                # DB保存 — 失敗したらエラーイベントを出し done は送らない
+                wc = len(hook) + len(body_txt) + len(closing)
+                get_supabase().table("scripts").update({
+                    "hook": hook,
+                    "body": body_txt,
+                    "closing": closing,
+                    "word_count": wc,
+                    "status": "completed",
+                }).eq("id", str(script_id)).execute()
+                return hook, body_txt, closing
+            except Exception:
                 try:
-                    sb_save = get_supabase()
-                    sb_save.table("scripts").update({
-                        "hook": hook_text,
-                        "body": body_content,
-                        "closing": closing_text,
-                        "word_count": total_word_count,
-                        "status": "completed",
-                    }).eq("id", str(script_id)).execute()
-                except Exception as db_err:
-                    yield {
-                        "event": "error",
-                        "data": json.dumps(
-                            {"error": f"DB保存エラー: {db_err}"},
-                            ensure_ascii=False,
-                        ),
-                    }
-                    return
-
-                yield {
-                    "event": "done",
-                    "data": json.dumps({
-                        "script_id": str(script_id),
-                        "word_count": total_word_count,
-                        "hook_length": len(hook_text or ""),
-                        "body_length": len(body_content or ""),
-                        "closing_length": len(closing_text or ""),
-                    }, ensure_ascii=False),
-                }
-            except Exception as e:
-                try:
-                    sb_err = get_supabase()
-                    sb_err.table("scripts").update({"status": "error"}).eq(
+                    get_supabase().table("scripts").update({"status": "error"}).eq(
                         "id", str(script_id)
                     ).execute()
                 except Exception:
                     pass
+                raise
+
+        async def event_generator_supabase():
+            """SSEイベント（Supabase SDK版）"""
+            yield {
+                "event": "start",
+                "data": json.dumps({"script_id": str(script_id)}, ensure_ascii=False),
+            }
+
+            # create_task で起動 → クライアント切断でもタスクは継続しDB保存まで完了する
+            task = asyncio.create_task(_gen_and_save())
+
+            try:
+                while not task.done():
+                    try:
+                        await asyncio.wait_for(asyncio.shield(task), timeout=10.0)
+                    except asyncio.TimeoutError:
+                        yield {"event": "ping", "data": json.dumps({})}
+            except asyncio.CancelledError:
+                # クライアント切断: タスクは継続、SSE側は終了
+                raise
+
+            exc = task.exception()
+            if exc:
                 yield {
                     "event": "error",
-                    "data": json.dumps({"error": str(e)}, ensure_ascii=False),
+                    "data": json.dumps({"error": str(exc)}, ensure_ascii=False),
                 }
+                return
+
+            hook_text, body_content, closing_text = task.result()
+            total_word_count = len(hook_text) + len(body_content) + len(closing_text)
+
+            combined = f"===HOOK===\n{hook_text}\n===BODY===\n{body_content}\n===CLOSING===\n{closing_text}"
+            yield {
+                "event": "chunk",
+                "data": json.dumps({"text": combined}, ensure_ascii=False),
+            }
+            yield {
+                "event": "done",
+                "data": json.dumps({
+                    "script_id": str(script_id),
+                    "word_count": total_word_count,
+                    "hook_length": len(hook_text),
+                    "body_length": len(body_content),
+                    "closing_length": len(closing_text),
+                }, ensure_ascii=False),
+            }
 
         return EventSourceResponse(event_generator_supabase(), ping=15)
 
