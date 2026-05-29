@@ -104,13 +104,22 @@ async def search_and_save_videos(
 
             if existing.data:
                 video_data = existing.data[0]
+                refreshed: dict[str, Any] = {}
+                if "view_count" in detail:
+                    refreshed["view_count"] = detail["view_count"]
+                if "like_count" in detail:
+                    refreshed["like_count"] = detail["like_count"]
+                if "comment_count" in detail:
+                    refreshed["comment_count"] = detail["comment_count"]
+                effective_view_count = refreshed.get("view_count", video_data.get("view_count"))
                 trending = _calc_trending_fields(
-                    video_data.get("view_count"),
+                    effective_view_count,
                     video_data.get("published_at"),
                     now,
                 )
-                sb.table("videos").update(trending).eq("id", video_data["id"]).execute()
-                video_data.update(trending)
+                update_payload = {**refreshed, **trending}
+                sb.table("videos").update(update_payload).eq("id", video_data["id"]).execute()
+                video_data.update(update_payload)
                 saved_videos.append(video_data)
                 continue
 
@@ -150,6 +159,12 @@ async def search_and_save_videos(
         stmt = select(Video).where(Video.youtube_video_id == yt_id)
         existing = (await db.execute(stmt)).scalar_one_or_none()
         if existing:
+            if "view_count" in detail:
+                existing.view_count = detail["view_count"]
+            if "like_count" in detail:
+                existing.like_count = detail["like_count"]
+            if "comment_count" in detail:
+                existing.comment_count = detail["comment_count"]
             _update_trending_fields(existing, now)
             saved_videos.append(existing)
             continue
