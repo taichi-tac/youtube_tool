@@ -9,6 +9,8 @@ interface VideoResult {
   id: string;
   youtube_video_id: string;
   title: string;
+  description?: string;
+  channel_id?: string;
   channel_title?: string;
   view_count?: number;
   like_count?: number;
@@ -18,6 +20,30 @@ interface VideoResult {
   views_per_day?: number;
   is_trending: boolean;
   duration_seconds?: number;
+  subscriber_count?: number;
+  channel_total_view_count?: number;
+  total_video_count?: number;
+  views_to_subs_ratio?: number;
+  subscriber_rate?: number;
+  like_rate?: number;
+  comment_rate?: number;
+  engagement_rate?: number;
+  hashtags?: string[];
+}
+
+interface AnalyzeResult {
+  summary: {
+    count: number;
+    avg_views: number;
+    median_views_per_day: number;
+    avg_like_rate: number;
+    avg_engagement: number;
+    duration_trend: string;
+    channel_size: string;
+  };
+  common_words: string[];
+  common_hashtags: string[];
+  plans: string[];
 }
 
 function formatDuration(seconds?: number): string {
@@ -158,11 +184,21 @@ export default function PipelinePage() {
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchOrder, setSearchOrder] = useState("relevance");
-  const [searchMaxResults, setSearchMaxResults] = useState(10);
+  const [searchMaxResults, setSearchMaxResults] = useState(15);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<VideoResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
+  // Miyabi viral 検索パラメータ
+  const [publishedAfter, setPublishedAfter] = useState("");
+  const [publishedBefore, setPublishedBefore] = useState("");
+  const [videoDuration, setVideoDuration] = useState<"any" | "short" | "medium" | "long">("medium");
+  const [viralThreshold, setViralThreshold] = useState(3);
+  // 動画選択 + 分析モーダル
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
+  const [analyzeLoading, setAnalyzeLoading] = useState(false);
+  const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null);
+  const [analyzeModalOpen, setAnalyzeModalOpen] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     return loadHistory();
@@ -186,9 +222,15 @@ export default function PipelinePage() {
       const data = await apiClient.post<VideoResult[]>(`/api/v1/videos/${pid}/search`, {
         query: q,
         max_results: searchMaxResults,
-        order: searchOrder,
+        order: "relevance",
+        viral_mode: true,
+        viral_threshold: viralThreshold,
+        video_duration: videoDuration,
+        published_after: publishedAfter ? new Date(publishedAfter).toISOString() : null,
+        published_before: publishedBefore ? new Date(publishedBefore).toISOString() : null,
       });
       setSearchResults(data);
+      setSelectedVideoIds(new Set());
       saveToHistory(q);
       setSearchHistory(loadHistory());
       saveResultsHistory(q, data);
@@ -210,6 +252,36 @@ export default function PipelinePage() {
     navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`);
     setCopiedId(videoId);
     setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const toggleVideoSelected = (id: string) => {
+    setSelectedVideoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const runAnalyze = async () => {
+    if (selectedVideoIds.size < 2) return;
+    setAnalyzeError(null);
+    setAnalyzeLoading(true);
+    setAnalyzeModalOpen(true);
+    setAnalyzeResult(null);
+    try {
+      const pid = await getProjectId();
+      const targets = searchResults.filter((v) => selectedVideoIds.has(v.id));
+      const data = await apiClient.post<AnalyzeResult>(
+        `/api/v1/videos/${pid}/analyze`,
+        { videos: targets }
+      );
+      setAnalyzeResult(data);
+    } catch (err) {
+      setAnalyzeError(err instanceof Error ? err.message : "分析に失敗しました");
+    } finally {
+      setAnalyzeLoading(false);
+    }
   };
 
   const addToUrls = (videoId: string) => {
@@ -523,22 +595,24 @@ export default function PipelinePage() {
         </div>
       )}
 
-      {/* YouTube動画検索セクション */}
+      {/* YouTube動画検索セクション（バイラル動画ファインダー） */}
       <div className="mt-12 border-t pt-8">
-        <h2 className="mb-2 text-lg font-semibold text-gray-900">YouTube動画検索</h2>
+        <h2 className="mb-2 text-lg font-semibold text-gray-900">🔥 バイラル動画検索</h2>
         <p className="mb-4 text-sm text-gray-500">
-          キーワードでYouTube動画を検索し、再生数・トレンドを確認できます
+          チャンネル登録者数の指定倍率以上の再生数を持つ動画を検索します
         </p>
 
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="space-y-3">
+          {/* 1段目: キーワード */}
+          <div className="relative">
+            <label className="mb-1 block text-xs font-semibold text-gray-700">検索キーワード *</label>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setShowHistory(true)}
               onBlur={() => setTimeout(() => setShowHistory(false), 150)}
-              placeholder="検索キーワードを入力..."
+              placeholder="例: 料理、旅行、プログラミング"
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
             {showHistory && searchHistory.length > 0 && (
@@ -558,32 +632,81 @@ export default function PipelinePage() {
               </ul>
             )}
           </div>
-          <select
-            value={searchOrder}
-            onChange={(e) => setSearchOrder(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="relevance">関連度順</option>
-            <option value="viewCount">再生数順</option>
-            <option value="date">新着順</option>
-            <option value="rating">評価順</option>
-          </select>
-          <select
-            value={searchMaxResults}
-            onChange={(e) => setSearchMaxResults(Number(e.target.value))}
-            className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value={10}>10件</option>
-            <option value={20}>20件</option>
-            <option value={30}>30件</option>
-            <option value={50}>50件</option>
-          </select>
+
+          {/* 2段目: 公開日 開始 / 終了 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-gray-700">公開日（開始）</label>
+              <input
+                type="date"
+                value={publishedAfter}
+                onChange={(e) => setPublishedAfter(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-[10px] text-gray-400">省略可</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-gray-700">公開日（終了）</label>
+              <input
+                type="date"
+                value={publishedBefore}
+                onChange={(e) => setPublishedBefore(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-[10px] text-gray-400">省略可</p>
+            </div>
+          </div>
+
+          {/* 3段目: 動画の長さ */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-700">動画の長さ</label>
+            <select
+              value={videoDuration}
+              onChange={(e) => setVideoDuration(e.target.value as "any" | "short" | "medium" | "long")}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="any">すべて</option>
+              <option value="medium">中程度（4分〜20分）※ショート除外</option>
+              <option value="long">長い動画（20分以上）</option>
+              <option value="short">ショート動画（4分未満）</option>
+            </select>
+            <p className="mt-1 text-[10px] text-gray-400">推奨: 中程度（ショート動画を除外）</p>
+          </div>
+
+          {/* 4段目: 登録者倍率 / 最大件数 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-gray-700">登録者倍率</label>
+              <input
+                type="number"
+                value={viralThreshold}
+                min={0}
+                step={0.1}
+                onChange={(e) => setViralThreshold(Number(e.target.value))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-[10px] text-gray-400">デフォルト: 3倍 / 0で絞り込み無効</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-gray-700">最大結果数</label>
+              <input
+                type="number"
+                value={searchMaxResults}
+                min={1}
+                max={50}
+                onChange={(e) => setSearchMaxResults(Math.max(1, Math.min(50, Number(e.target.value))))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-[10px] text-gray-400">バイラル動画がこの件数見つかるまで検索</p>
+            </div>
+          </div>
+
           <button
             onClick={() => handleSearch()}
             disabled={searchLoading || !searchQuery.trim()}
-            className="rounded-lg bg-gradient-to-r from-green-600 to-teal-600 px-6 py-2.5 text-sm font-bold text-white hover:from-green-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 text-base font-bold text-white hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {searchLoading ? "検索中..." : "検索"}
+            {searchLoading ? "検索中..." : "🔍 バイラル動画を検索"}
           </button>
         </div>
 
@@ -601,44 +724,57 @@ export default function PipelinePage() {
         )}
 
         {searchResults.length > 0 && !searchLoading && (() => {
-          const avgVpd = searchResults.reduce((s, v) => s + (v.views_per_day || 0), 0) / searchResults.length;
-          const maxVpd = Math.max(...searchResults.map(v => v.views_per_day || 0));
+          const ratios = searchResults.map(v => v.views_to_subs_ratio || 0).filter(r => r > 0);
+          const avgRatio = ratios.length ? ratios.reduce((s, r) => s + r, 0) / ratios.length : 0;
+          const maxRatio = ratios.length ? Math.max(...ratios) : 0;
           return (
           <div className="mt-6">
             {/* サマリーバー */}
             <div className="mb-6 grid grid-cols-3 gap-3">
-              <div className="rounded-lg bg-blue-600 p-3 text-center text-white">
+              <div className="rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 p-3 text-center text-white">
                 <p className="text-xs opacity-80">発見した動画数</p>
                 <p className="text-xl font-bold">{searchResults.length}件</p>
               </div>
-              <div className="rounded-lg bg-blue-600 p-3 text-center text-white">
-                <p className="text-xs opacity-80">平均 日次再生</p>
-                <p className="text-xl font-bold">{avgVpd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+              <div className="rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 p-3 text-center text-white">
+                <p className="text-xs opacity-80">平均倍率</p>
+                <p className="text-xl font-bold">{avgRatio.toFixed(1)}x</p>
               </div>
-              <div className="rounded-lg bg-blue-600 p-3 text-center text-white">
-                <p className="text-xs opacity-80">最大 日次再生</p>
-                <p className="text-xl font-bold">{maxVpd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+              <div className="rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 p-3 text-center text-white">
+                <p className="text-xs opacity-80">最大倍率</p>
+                <p className="text-xl font-bold">{maxRatio.toFixed(1)}x</p>
               </div>
             </div>
 
             {/* タイルグリッド */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {searchResults.map((v) => {
-                const engRate = v.view_count ? (((v.like_count || 0) + (v.comment_count || 0)) / v.view_count * 100) : 0;
-                const likeRate = v.view_count ? ((v.like_count || 0) / v.view_count * 100) : 0;
-                const commentRate = v.view_count ? ((v.comment_count || 0) / v.view_count * 100) : 0;
+                const selected = selectedVideoIds.has(v.id);
+                const ratio = v.views_to_subs_ratio || 0;
+                const engRate = ((v.engagement_rate ?? 0) * 100);
+                const likeRate = ((v.like_rate ?? 0) * 100);
+                const commentRate = ((v.comment_rate ?? 0) * 100);
+                const subRate = ((v.subscriber_rate ?? 0) * 100);
                 return (
-                <div key={v.id} className="rounded-xl border bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-                  {/* サムネイル */}
+                <div
+                  key={v.id}
+                  className={`rounded-xl border bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden ${selected ? "ring-2 ring-purple-500" : ""}`}
+                >
+                  {/* サムネイル + バッジ + チェックボックス */}
                   <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleVideoSelected(v.id)}
+                      className="absolute top-2 left-2 z-10 h-5 w-5 accent-purple-600 cursor-pointer"
+                    />
                     {v.thumbnail_url && (
                       <a href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`} target="_blank" rel="noopener noreferrer">
                         <img src={v.thumbnail_url} alt="" className="w-full h-44 object-cover" />
                       </a>
                     )}
-                    {v.is_trending && (
-                      <span className="absolute top-2 right-2 rounded bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
-                        {v.views_per_day?.toLocaleString()}/日
+                    {ratio > 0 && (
+                      <span className="absolute top-2 right-2 rounded-full bg-red-500 px-3 py-0.5 text-xs font-bold text-white shadow">
+                        {ratio.toFixed(1)}x バイラル
                       </span>
                     )}
                   </div>
@@ -648,22 +784,26 @@ export default function PipelinePage() {
                     <a
                       href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`}
                       target="_blank" rel="noopener noreferrer"
-                      className="text-sm font-semibold text-gray-900 hover:text-blue-600 line-clamp-2"
+                      className="text-sm font-semibold text-gray-900 hover:text-purple-600 line-clamp-2"
                     >
                       {v.title}
                     </a>
-                    <p className="mt-1 text-xs text-gray-500">{v.channel_title || "-"}</p>
+                    <p className="mt-1 text-xs text-gray-500">📺 {v.channel_title || "-"}</p>
                   </div>
 
-                  {/* 指標グリッド */}
+                  {/* 8指標グリッド */}
                   <div className="grid grid-cols-2 gap-px bg-gray-100 border-t">
                     <div className="bg-white px-3 py-2">
                       <p className="text-[10px] text-gray-400">再生数</p>
                       <p className="text-sm font-bold text-gray-900">{v.view_count != null ? v.view_count.toLocaleString() : "-"}</p>
                     </div>
                     <div className="bg-white px-3 py-2">
+                      <p className="text-[10px] text-gray-400">拡散率</p>
+                      <p className="text-sm font-bold text-gray-900">{ratio > 0 ? `${ratio.toFixed(1)}x` : "-"}</p>
+                    </div>
+                    <div className="bg-white px-3 py-2">
                       <p className="text-[10px] text-gray-400">急上昇率(1日)</p>
-                      <p className="text-sm font-bold text-gray-900">{v.views_per_day != null ? v.views_per_day.toLocaleString() : "-"}</p>
+                      <p className="text-sm font-bold text-gray-900">{v.views_per_day != null ? Math.round(v.views_per_day).toLocaleString() : "-"}</p>
                     </div>
                     <div className="bg-white px-3 py-2">
                       <p className="text-[10px] text-gray-400">エンゲージメント率</p>
@@ -678,12 +818,16 @@ export default function PipelinePage() {
                       <p className="text-sm font-bold text-gray-900">{commentRate.toFixed(2)}%</p>
                     </div>
                     <div className="bg-white px-3 py-2">
-                      <p className="text-[10px] text-gray-400">高評価数</p>
-                      <p className="text-sm font-bold text-gray-900">{v.like_count != null ? v.like_count.toLocaleString() : "-"}</p>
+                      <p className="text-[10px] text-gray-400">登録率</p>
+                      <p className="text-sm font-bold text-gray-900">{subRate.toFixed(2)}%</p>
+                    </div>
+                    <div className="bg-white px-3 py-2">
+                      <p className="text-[10px] text-gray-400">登録者数</p>
+                      <p className="text-sm font-bold text-gray-900">{v.subscriber_count != null ? v.subscriber_count.toLocaleString() : "-"}</p>
                     </div>
                   </div>
 
-                  {/* ボタン・フッター */}
+                  {/* ボタン */}
                   <div className="flex gap-2 border-t p-3">
                     <a
                       href={`https://www.youtube.com/watch?v=${v.youtube_video_id}`}
@@ -692,6 +836,15 @@ export default function PipelinePage() {
                     >
                       動画を見る
                     </a>
+                    {v.channel_id && (
+                      <a
+                        href={`https://www.youtube.com/channel/${v.channel_id}`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="flex-1 rounded-lg bg-purple-600 py-1.5 text-center text-xs font-bold text-white hover:bg-purple-700"
+                      >
+                        チャンネル
+                      </a>
+                    )}
                     <button
                       onClick={() => copyUrl(v.youtube_video_id)}
                       className={`flex-1 rounded-lg border py-1.5 text-center text-xs font-bold transition-colors ${
@@ -703,16 +856,41 @@ export default function PipelinePage() {
                     <button
                       onClick={() => addToUrls(v.youtube_video_id)}
                       disabled={!urls.some((u) => !u.trim())}
-                      className="flex-1 rounded-lg bg-purple-600 py-1.5 text-center text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="flex-1 rounded-lg bg-indigo-600 py-1.5 text-center text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       分析対象に追加
                     </button>
                   </div>
 
-                  <div className="flex border-t px-3 py-2 text-[10px] text-gray-400 gap-4">
-                    <span>{formatDuration(v.duration_seconds)}</span>
-                    <span>{formatDate(v.published_at)}</span>
+                  {/* 長さ / 総動画数 / 公開日 */}
+                  <div className="grid grid-cols-3 gap-2 border-t px-3 py-2 text-[10px] text-gray-500">
+                    <div>
+                      <p className="font-bold text-gray-800">{formatDuration(v.duration_seconds)}</p>
+                      <p>長さ</p>
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-800">{v.total_video_count != null ? v.total_video_count.toLocaleString() : "-"}</p>
+                      <p>総動画数</p>
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-800">{formatDate(v.published_at)}</p>
+                      <p>公開日</p>
+                    </div>
                   </div>
+
+                  {/* ハッシュタグ */}
+                  {v.hashtags && v.hashtags.length > 0 && (
+                    <div className="border-t px-3 py-2 text-[11px] text-purple-600">
+                      {v.hashtags.slice(0, 5).join(" ")}
+                    </div>
+                  )}
+
+                  {/* 概要欄プレビュー */}
+                  {v.description && (
+                    <div className="border-t px-3 py-2 text-[11px] text-gray-500 line-clamp-2">
+                      {v.description.substring(0, 200)}
+                    </div>
+                  )}
                 </div>
                 );
               })}
@@ -720,6 +898,117 @@ export default function PipelinePage() {
           </div>
           );
         })()}
+
+        {/* 分析バー（2件以上選択時にフッター固定表示） */}
+        {selectedVideoIds.size >= 2 && (
+          <div className="fixed bottom-0 left-0 right-0 z-30 border-t-2 border-purple-500 bg-white shadow-2xl">
+            <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+              <span className="text-base font-bold text-purple-600">{selectedVideoIds.size}件選択中</span>
+              <button
+                onClick={runAnalyze}
+                disabled={analyzeLoading}
+                className="rounded-full bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-2.5 text-sm font-bold text-white hover:from-purple-700 hover:to-pink-700 disabled:opacity-50"
+              >
+                🔍 選択した動画を分析・企画化
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 分析モーダル */}
+        {analyzeModalOpen && (
+          <div
+            className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-4"
+            onClick={() => setAnalyzeModalOpen(false)}
+          >
+            <div
+              className="my-8 w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between">
+                <h2 className="text-xl font-bold text-purple-600">📊 分析結果 & 企画案</h2>
+                <button
+                  onClick={() => setAnalyzeModalOpen(false)}
+                  className="text-2xl text-gray-400 hover:text-gray-600"
+                >✕</button>
+              </div>
+
+              {analyzeLoading && (
+                <p className="my-10 text-center text-gray-500">分析中...</p>
+              )}
+              {analyzeError && (
+                <div className="my-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{analyzeError}</div>
+              )}
+
+              {analyzeResult && (
+                <div className="mt-4 space-y-5">
+                  <div>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      📈 数値傾向（選択{analyzeResult.summary.count}本の平均）
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-gray-50 p-2 text-sm">
+                        <p className="text-[11px] text-gray-400">平均再生数</p>
+                        <p className="font-bold text-gray-800">{analyzeResult.summary.avg_views.toLocaleString()}回</p>
+                      </div>
+                      <div className="rounded-lg bg-gray-50 p-2 text-sm">
+                        <p className="text-[11px] text-gray-400">中央急上昇率(1日)</p>
+                        <p className="font-bold text-gray-800">{analyzeResult.summary.median_views_per_day.toLocaleString()}回/日</p>
+                      </div>
+                      <div className="rounded-lg bg-gray-50 p-2 text-sm">
+                        <p className="text-[11px] text-gray-400">平均高評価率</p>
+                        <p className="font-bold text-gray-800">{analyzeResult.summary.avg_like_rate}%</p>
+                      </div>
+                      <div className="rounded-lg bg-gray-50 p-2 text-sm">
+                        <p className="text-[11px] text-gray-400">平均エンゲージメント</p>
+                        <p className="font-bold text-gray-800">{analyzeResult.summary.avg_engagement}%</p>
+                      </div>
+                      <div className="rounded-lg bg-gray-50 p-2 text-sm">
+                        <p className="text-[11px] text-gray-400">動画の長さ傾向</p>
+                        <p className="font-bold text-gray-800">{analyzeResult.summary.duration_trend}</p>
+                      </div>
+                      <div className="rounded-lg bg-gray-50 p-2 text-sm">
+                        <p className="text-[11px] text-gray-400">チャンネル規模</p>
+                        <p className="font-bold text-gray-800">{analyzeResult.summary.channel_size}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {analyzeResult.common_words.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">🔤 タイトル共通キーワード</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {analyzeResult.common_words.map((w) => (
+                          <span key={w} className="rounded-full bg-purple-50 px-3 py-1 text-xs font-bold text-purple-600">{w}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {analyzeResult.common_hashtags.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">#️⃣ 共通ハッシュタグ</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {analyzeResult.common_hashtags.map((t) => (
+                          <span key={t} className="rounded-full bg-purple-50 px-3 py-1 text-xs font-bold text-purple-600">{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">💡 企画案（5パターン）</h3>
+                    <div className="space-y-2">
+                      {analyzeResult.plans.map((p, i) => (
+                        <div key={i} className="rounded-r-lg border-l-4 border-purple-500 bg-gray-50 px-4 py-3 text-sm">{p}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 検索結果履歴 */}

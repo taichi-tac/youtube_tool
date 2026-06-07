@@ -49,6 +49,10 @@ async def search_videos(
     order: str = "relevance",
     region_code: str = "JP",
     api_key: str | None = None,
+    published_after: Optional[str] = None,
+    published_before: Optional[str] = None,
+    video_duration: str = "any",
+    relevance_language: Optional[str] = "ja",
 ) -> list[dict[str, Any]]:
     """
     YouTube動画を検索する。
@@ -59,6 +63,10 @@ async def search_videos(
         order: 並び順（relevance, date, viewCount, rating）
         region_code: リージョンコード
         api_key: ユーザー独自のAPIキー（省略時はシステムキー）
+        published_after: 公開日 開始 (ISO 8601)
+        published_before: 公開日 終了 (ISO 8601)
+        video_duration: any / short / medium / long
+        relevance_language: 関連言語
     """
     # ユーザーAPIキーがある場合はクォータチェックをスキップ
     if not api_key:
@@ -66,7 +74,7 @@ async def search_videos(
             raise RuntimeError("YouTube APIの1日あたりのクォータ上限に達しました")
 
     youtube = _get_youtube_client(api_key)
-    request = youtube.search().list(
+    list_params: dict[str, Any] = dict(
         q=query,
         part="snippet",
         type="video",
@@ -74,6 +82,15 @@ async def search_videos(
         order=order,
         regionCode=region_code,
     )
+    if relevance_language:
+        list_params["relevanceLanguage"] = relevance_language
+    if published_after:
+        list_params["publishedAfter"] = published_after
+    if published_before:
+        list_params["publishedBefore"] = published_before
+    if video_duration and video_duration != "any":
+        list_params["videoDuration"] = video_duration
+    request = youtube.search().list(**list_params)
     response: dict[str, Any] = request.execute()
 
     results: list[dict[str, Any]] = []
@@ -113,12 +130,18 @@ async def get_video_details(video_ids: list[str], api_key: str | None = None) ->
         snippet = item.get("snippet", {})
         stats = item.get("statistics", {})
         content = item.get("contentDetails", {})
+        description = snippet.get("description", "") or ""
+        hashtag_matches = re.findall(r"#[\w　-鿿＀-￯]+", description)
+        snippet_tags = [t for t in (snippet.get("tags") or []) if isinstance(t, str) and t.startswith("#")]
+        hashtags = list(dict.fromkeys([*hashtag_matches, *snippet_tags]))
         results.append({
             "youtube_video_id": item["id"],
             "title": snippet.get("title", ""),
-            "description": snippet.get("description", ""),
+            "description": description,
             "channel_title": snippet.get("channelTitle", ""),
             "channel_id": snippet.get("channelId", ""),
+            "category_id": snippet.get("categoryId"),
+            "hashtags": hashtags,
             "published_at": datetime.fromisoformat(snippet["publishedAt"].replace("Z", "+00:00")) if snippet.get("publishedAt") else None,
             "view_count": int(stats.get("viewCount", 0)),
             "like_count": int(stats.get("likeCount", 0)),
@@ -128,6 +151,41 @@ async def get_video_details(video_ids: list[str], api_key: str | None = None) ->
         })
 
     return results
+
+
+async def get_channel_details(channel_ids: list[str], api_key: str | None = None) -> dict[str, dict[str, Any]]:
+    """チャンネルIDリストから登録者数・総再生数・総動画数を取得し、ID→dict のマップで返す。"""
+    if not channel_ids:
+        return {}
+
+    # 重複排除
+    unique_ids = list(dict.fromkeys(channel_ids))
+
+    if not api_key:
+        if not await quota_manager.consume("channels.list"):
+            raise RuntimeError("YouTube APIの1日あたりのクォータ上限に達しました")
+
+    youtube = _get_youtube_client(api_key)
+    request = youtube.channels().list(
+        id=",".join(unique_ids),
+        part="snippet,statistics,contentDetails",
+    )
+    response: dict[str, Any] = request.execute()
+
+    result_map: dict[str, dict[str, Any]] = {}
+    for item in response.get("items", []):
+        stats = item.get("statistics", {})
+        snippet = item.get("snippet", {})
+        cid = item.get("id")
+        if not cid:
+            continue
+        result_map[cid] = {
+            "subscriber_count": int(stats.get("subscriberCount", 0) or 0),
+            "channel_total_view_count": int(stats.get("viewCount", 0) or 0),
+            "total_video_count": int(stats.get("videoCount", 0) or 0),
+            "channel_created_at": snippet.get("publishedAt"),
+        }
+    return result_map
 
 
 async def get_comments(

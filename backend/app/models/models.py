@@ -164,6 +164,15 @@ class Video(Base):
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     views_per_day: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     is_trending: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    subscriber_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    channel_total_view_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    total_video_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    views_to_subs_ratio: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    subscriber_rate: Mapped[float | None] = mapped_column(Numeric(10, 6), nullable=True)
+    like_rate: Mapped[float | None] = mapped_column(Numeric(10, 6), nullable=True)
+    comment_rate: Mapped[float | None] = mapped_column(Numeric(10, 6), nullable=True)
+    engagement_rate: Mapped[float | None] = mapped_column(Numeric(10, 6), nullable=True)
+    hashtags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     keyword_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("keywords.id", ondelete="SET NULL"), nullable=True
     )

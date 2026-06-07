@@ -18,6 +18,8 @@ from app.models.models import Video, VideoComment
 from app.schemas.schemas import (
     CommentAnalysisResponse,
     QuotaStatusResponse,
+    VideoAnalyzeRequest,
+    VideoAnalyzeResponse,
     VideoCommentResponse,
     VideoResponse,
     VideoSearchRequest,
@@ -28,7 +30,11 @@ from app.services.comment_service import (
     get_comments_by_video,
 )
 from app.services.comment_service import analyze_comments_with_llm
-from app.services.youtube_service import get_video_details, search_videos
+from app.services.youtube_service import (
+    get_channel_details,
+    get_video_details,
+    search_videos,
+)
 
 router = APIRouter(prefix="/videos", tags=["動画"])
 
@@ -55,6 +61,36 @@ def _calc_trending_fields(view_count, published_at, now) -> dict[str, Any]:
     return {"views_per_day": None, "is_trending": False}
 
 
+def _calc_viral_metrics(
+    detail: dict[str, Any],
+    channel_info: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """拡散率・登録率・各エンゲージメント率を計算する"""
+    view_count = detail.get("view_count") or 0
+    like_count = detail.get("like_count") or 0
+    comment_count = detail.get("comment_count") or 0
+    subscriber_count = (channel_info or {}).get("subscriber_count") or 0
+    channel_total = (channel_info or {}).get("channel_total_view_count") or 0
+    total_videos = (channel_info or {}).get("total_video_count") or 0
+
+    views_to_subs_ratio = (view_count / subscriber_count) if subscriber_count > 0 else 0.0
+    subscriber_rate = (subscriber_count / channel_total) if channel_total > 0 else 0.0
+    like_rate = (like_count / view_count) if view_count > 0 else 0.0
+    comment_rate = (comment_count / view_count) if view_count > 0 else 0.0
+    engagement_rate = ((like_count + comment_count) / view_count) if view_count > 0 else 0.0
+
+    return {
+        "subscriber_count": subscriber_count or None,
+        "channel_total_view_count": channel_total or None,
+        "total_video_count": total_videos or None,
+        "views_to_subs_ratio": round(views_to_subs_ratio, 2),
+        "subscriber_rate": round(subscriber_rate, 6),
+        "like_rate": round(like_rate, 6),
+        "comment_rate": round(comment_rate, 6),
+        "engagement_rate": round(engagement_rate, 6),
+    }
+
+
 @router.post("/{project_id}/search", response_model=list[VideoResponse])
 async def search_and_save_videos(
     project_id: uuid.UUID,
@@ -71,12 +107,21 @@ async def search_and_save_videos(
         if proj.data and proj.data[0].get("youtube_api_key"):
             user_api_key = proj.data[0]["youtube_api_key"]
 
+    # viral mode かどうかでデフォルト並び順を変える
+    effective_order = body.order
+    if body.viral_mode and effective_order == "relevance":
+        # Miyabi 仕様: viral では relevance で検索し、後段で急上昇率順にソート
+        effective_order = "relevance"
+
     # YouTube検索実行（最大50件）
     search_results = await search_videos(
         query=body.query,
         max_results=min(body.max_results, 50),
-        order=body.order,
+        order=effective_order,
         api_key=user_api_key,
+        published_after=body.published_after,
+        published_before=body.published_before,
+        video_duration=body.video_duration,
     )
 
     if not search_results:
@@ -87,7 +132,33 @@ async def search_and_save_videos(
     details = await get_video_details(video_ids, api_key=user_api_key)
     detail_map: dict[str, dict[str, Any]] = {d["youtube_video_id"]: d for d in details}
 
+    # viral mode のときのみ channel 情報を取得（クォータ節約）
+    channel_map: dict[str, dict[str, Any]] = {}
+    if body.viral_mode:
+        channel_ids = [d.get("channel_id") for d in details if d.get("channel_id")]
+        channel_map = await get_channel_details(channel_ids, api_key=user_api_key)
+
     now = datetime.now(timezone.utc)
+
+    def _build_viral_payload(detail: dict[str, Any]) -> dict[str, Any]:
+        """viral mode 用に拡散率・登録率等とハッシュタグを返す"""
+        if not body.viral_mode:
+            return {}
+        ch_info = channel_map.get(detail.get("channel_id") or "")
+        payload = _calc_viral_metrics(detail, ch_info)
+        payload["hashtags"] = detail.get("hashtags") or []
+        return payload
+
+    def _passes_viral_filter(detail: dict[str, Any], metrics: dict[str, Any]) -> bool:
+        """viral threshold とゲームカテゴリ除外を適用"""
+        if not body.viral_mode:
+            return True
+        if detail.get("category_id") == "20":  # ゲームカテゴリ除外
+            return False
+        if body.viral_threshold <= 0:
+            return True
+        ratio = metrics.get("views_to_subs_ratio") or 0.0
+        return ratio >= body.viral_threshold
 
     if use_supabase_sdk():
         sb = get_supabase()
@@ -101,6 +172,10 @@ async def search_and_save_videos(
             existing = sb.table("videos").select("*").eq(
                 "youtube_video_id", yt_id
             ).execute()
+
+            viral_payload = _build_viral_payload(detail)
+            if not _passes_viral_filter(detail, viral_payload):
+                continue
 
             if existing.data:
                 video_data = existing.data[0]
@@ -117,7 +192,7 @@ async def search_and_save_videos(
                     video_data.get("published_at"),
                     now,
                 )
-                update_payload = {**refreshed, **trending}
+                update_payload = {**refreshed, **trending, **viral_payload}
                 sb.table("videos").update(update_payload).eq("id", video_data["id"]).execute()
                 video_data.update(update_payload)
                 saved_videos.append(video_data)
@@ -143,10 +218,17 @@ async def search_and_save_videos(
                 "keyword_id": str(body.keyword_id) if body.keyword_id else None,
                 "views_per_day": trending["views_per_day"],
                 "is_trending": trending["is_trending"],
+                **viral_payload,
             }
             insert_result = sb.table("videos").insert(video_data).execute()
             saved_videos.append(insert_result.data[0])
 
+        # viral mode は急上昇率(views_per_day)降順に並べ替え
+        if body.viral_mode:
+            saved_videos.sort(
+                key=lambda v: float(v.get("views_per_day") or 0),
+                reverse=True,
+            )
         return saved_videos
 
     # SQLAlchemy path
@@ -154,6 +236,10 @@ async def search_and_save_videos(
     for result in search_results:
         yt_id = result["youtube_video_id"]
         detail = detail_map.get(yt_id, {})
+
+        viral_payload = _build_viral_payload(detail)
+        if not _passes_viral_filter(detail, viral_payload):
+            continue
 
         # 既存チェック
         stmt = select(Video).where(Video.youtube_video_id == yt_id)
@@ -165,6 +251,8 @@ async def search_and_save_videos(
                 existing.like_count = detail["like_count"]
             if "comment_count" in detail:
                 existing.comment_count = detail["comment_count"]
+            for k, v in viral_payload.items():
+                setattr(existing, k, v)
             _update_trending_fields(existing, now)
             saved_videos.append(existing)
             continue
@@ -186,6 +274,7 @@ async def search_and_save_videos(
             duration_seconds=detail.get("duration_seconds"),
             thumbnail_url=detail.get("thumbnail_url", result.get("thumbnail_url")),
             keyword_id=body.keyword_id,
+            **viral_payload,
         )
         _update_trending_fields(video, now)
         db.add(video)
@@ -195,6 +284,11 @@ async def search_and_save_videos(
     for v in saved_videos:
         await db.refresh(v)
 
+    if body.viral_mode:
+        saved_videos.sort(
+            key=lambda v: float(v.views_per_day or 0),
+            reverse=True,
+        )
     return saved_videos
 
 
@@ -662,4 +756,133 @@ def _build_comment_analysis_response(
         need_categories=need_categories,
         sentiment_summary=sentiment_counts,
         question_count=question_count,
+    )
+
+
+# ============================================================
+# 動画傾向分析（Miyabi viral analyze 移植・ルールベース）
+# ============================================================
+
+def _parse_duration_to_seconds(duration: Any) -> int:
+    """'1:30:45' / '4:20' / 数値 を秒数に変換"""
+    if duration is None:
+        return 0
+    if isinstance(duration, (int, float)):
+        return int(duration)
+    s = str(duration)
+    if ":" not in s:
+        try:
+            return int(float(s))
+        except ValueError:
+            return 0
+    parts = [int(p) for p in s.split(":") if p.isdigit()]
+    if len(parts) == 3:
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    return 0
+
+
+@router.post("/{project_id}/analyze", response_model=VideoAnalyzeResponse)
+async def analyze_selected_videos(
+    project_id: uuid.UUID,
+    body: VideoAnalyzeRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+):
+    """選択した動画の数値傾向・共通キーワード・企画案を返す（ルールベース）"""
+    import re as _re
+    import statistics as _stats
+
+    videos = body.videos or []
+    if len(videos) < 2:
+        raise HTTPException(status_code=400, detail="2本以上の動画を選択してください")
+
+    def _f(v: Any, default: float = 0.0) -> float:
+        try:
+            return float(v) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+
+    view_counts = [_f(v.get("view_count") or v.get("viewCount")) for v in videos]
+    views_per_days = [_f(v.get("views_per_day") or v.get("viewsPerDay")) for v in videos]
+    like_rates = [_f(v.get("like_rate") or v.get("likeRate")) for v in videos]
+    engagement_rates = [_f(v.get("engagement_rate") or v.get("engagementRate")) for v in videos]
+    subscriber_counts = [_f(v.get("subscriber_count") or v.get("subscriberCount")) for v in videos]
+    durations = [
+        _parse_duration_to_seconds(v.get("duration_seconds") or v.get("duration"))
+        for v in videos
+    ]
+
+    avg_duration = sum(durations) / len(durations) if durations else 0
+    if avg_duration < 240:
+        duration_trend = "ショート（4分未満）"
+    elif avg_duration < 600:
+        duration_trend = "短め（4〜10分）"
+    elif avg_duration < 1200:
+        duration_trend = "中尺（10〜20分）"
+    else:
+        duration_trend = "長尺（20分以上）"
+
+    avg_subs = sum(subscriber_counts) / len(subscriber_counts) if subscriber_counts else 0
+    if avg_subs < 10000:
+        channel_size = "小規模（1万未満）"
+    elif avg_subs < 100000:
+        channel_size = "中規模（1〜10万）"
+    elif avg_subs < 1000000:
+        channel_size = "大規模（10〜100万）"
+    else:
+        channel_size = "超大規模（100万以上）"
+
+    # タイトル共通キーワード
+    title_words: dict[str, int] = {}
+    for v in videos:
+        title = str(v.get("title") or "")
+        title = _re.sub(r"[【】「」『』()（）\[\]]", " ", title)
+        for w in _re.split(r"[\s　・、。!！?？]+", title):
+            if len(w) >= 2:
+                title_words[w] = title_words.get(w, 0) + 1
+    threshold_count = max(2, -(-len(videos) * 4 // 10))  # ceil(len*0.4)
+    common_words = [
+        w for w, c in sorted(title_words.items(), key=lambda x: -x[1])
+        if c >= threshold_count
+    ][:8]
+
+    # ハッシュタグ
+    hashtag_counts: dict[str, int] = {}
+    for v in videos:
+        tags = v.get("hashtags") or []
+        if isinstance(tags, list):
+            for tag in tags:
+                hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
+    common_hashtags = [
+        t for t, c in sorted(hashtag_counts.items(), key=lambda x: -x[1]) if c >= 2
+    ][:5]
+
+    avg_views = sum(view_counts) / len(view_counts) if view_counts else 0
+    median_vpd = _stats.median(views_per_days) if views_per_days else 0
+    avg_like_rate = sum(like_rates) / len(like_rates) if like_rates else 0
+    avg_engagement = sum(engagement_rates) / len(engagement_rates) if engagement_rates else 0
+
+    kw = "・".join(common_words[:3]) if common_words else "検索キーワード"
+    plans = [
+        f"【数字訴求】「{kw}で{max(1, round(avg_views / 1000))}倍の結果を出す○○の方法」",
+        f"【入門系】「{kw}完全ガイド｜初心者でも{'5分で' if avg_duration < 600 else ''}わかる基礎から実践まで」",
+        f"【比較系】「{kw}を徹底比較！プロが選ぶTOP{len(videos)}選【2026年版】」",
+        f"【失敗談】「{kw}で失敗した○○の話〜やってはいけないこと全部教えます」",
+        f"【結果系】「{kw}を1ヶ月続けた結果がヤバすぎた」",
+    ]
+
+    return VideoAnalyzeResponse(
+        summary={
+            "count": len(videos),
+            "avg_views": round(avg_views),
+            "median_views_per_day": round(median_vpd),
+            "avg_like_rate": round(avg_like_rate * 100, 2),
+            "avg_engagement": round(avg_engagement * 100, 2),
+            "duration_trend": duration_trend,
+            "channel_size": channel_size,
+        },
+        common_words=common_words,
+        common_hashtags=common_hashtags,
+        plans=plans,
     )

@@ -117,9 +117,15 @@ class KeywordSuggestResponse(BaseModel):
 class VideoSearchRequest(BaseModel):
     """動画検索リクエスト"""
     query: str = Field(..., description="検索クエリ")
-    max_results: int = Field(10, ge=1, le=50, description="最大取得件数")
-    order: str = Field("relevance", description="並び順")
+    max_results: int = Field(15, ge=1, le=50, description="最大取得件数")
+    order: str = Field("relevance", description="並び順 (viral モード時は未使用)")
     keyword_id: Optional[uuid.UUID] = Field(None, description="紐づけるキーワードID")
+    # Viral 検索用パラメータ（全て任意・既存呼び出しは無影響）
+    published_after: Optional[str] = Field(None, description="公開日 開始 (ISO 8601)")
+    published_before: Optional[str] = Field(None, description="公開日 終了 (ISO 8601)")
+    video_duration: str = Field("any", description="動画長さ: any/short/medium/long")
+    viral_threshold: float = Field(0.0, ge=0, description="登録者倍率 (0=絞り込み無効)")
+    viral_mode: bool = Field(False, description="True で viral 判定+ソートを行う")
 
 
 class VideoUrlRequest(BaseModel):
@@ -144,12 +150,34 @@ class VideoResponse(BaseModel):
     thumbnail_url: Optional[str]
     views_per_day: Optional[float]
     is_trending: bool
+    subscriber_count: Optional[int] = None
+    channel_total_view_count: Optional[int] = None
+    total_video_count: Optional[int] = None
+    views_to_subs_ratio: Optional[float] = None
+    subscriber_rate: Optional[float] = None
+    like_rate: Optional[float] = None
+    comment_rate: Optional[float] = None
+    engagement_rate: Optional[float] = None
+    hashtags: Optional[list[str]] = None
     keyword_id: Optional[uuid.UUID]
     thumbnail_analysis: Optional[dict[str, Any]]
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class VideoAnalyzeRequest(BaseModel):
+    """選択動画群の傾向分析リクエスト"""
+    videos: list[dict[str, Any]] = Field(..., description="分析対象の動画情報")
+
+
+class VideoAnalyzeResponse(BaseModel):
+    """傾向分析レスポンス"""
+    summary: dict[str, Any]
+    common_words: list[str]
+    common_hashtags: list[str]
+    plans: list[str]
 
 
 class VideoCommentResponse(BaseModel):
