@@ -150,15 +150,13 @@ async def search_and_save_videos(
         return payload
 
     def _passes_viral_filter(detail: dict[str, Any], metrics: dict[str, Any]) -> bool:
-        """viral threshold とゲームカテゴリ除外を適用"""
+        """viral 表示用フィルタ。Miyabi互換: threshold は絞り込みに使わない。
+        ゲームカテゴリのみ除外する。"""
         if not body.viral_mode:
             return True
         if detail.get("category_id") == "20":  # ゲームカテゴリ除外
             return False
-        if body.viral_threshold <= 0:
-            return True
-        ratio = metrics.get("views_to_subs_ratio") or 0.0
-        return ratio >= body.viral_threshold
+        return True
 
     if use_supabase_sdk():
         sb = get_supabase()

@@ -685,7 +685,7 @@ export default function PipelinePage() {
                 onChange={(e) => setViralThreshold(Number(e.target.value))}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-              <p className="mt-1 text-[10px] text-gray-400">デフォルト: 3倍 / 0で絞り込み無効</p>
+              <p className="mt-1 text-[10px] text-gray-400">バッジ表示の基準値（絞込みには使わない）</p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-700">最大結果数</label>
