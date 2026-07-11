@@ -16,24 +16,19 @@ let _cachedProjectId: string | null = null;
 export async function getProjectId(): Promise<string> {
   if (_cachedProjectId) return _cachedProjectId;
 
-  try {
-    const projects = await apiClient.get<{ id: string }[]>("/api/v1/projects/");
-    if (projects.length > 0) {
-      _cachedProjectId = projects[0].id;
-      return _cachedProjectId;
-    }
-
-    // プロジェクトがなければ自動作成
-    const newProject = await apiClient.post<{ id: string }>("/api/v1/projects/", {
-      name: "マイチャンネル",
-      genre: "YouTube運用",
-    });
-    _cachedProjectId = newProject.id;
+  const projects = await apiClient.get<{ id: string }[]>("/api/v1/projects/");
+  if (projects.length > 0) {
+    _cachedProjectId = projects[0].id;
     return _cachedProjectId;
-  } catch {
-    // フォールバック
-    return "00000000-0000-0000-0000-000000000002";
   }
+
+  // プロジェクトがなければ自動作成
+  const newProject = await apiClient.post<{ id: string }>("/api/v1/projects/", {
+    name: "マイチャンネル",
+    genre: "YouTube運用",
+  });
+  _cachedProjectId = newProject.id;
+  return _cachedProjectId;
 }
 
 /** 開発用固定値（後方互換） */

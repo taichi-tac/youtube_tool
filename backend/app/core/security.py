@@ -87,32 +87,59 @@ DEV_USER_ID = "00000000-0000-0000-0000-000000000001"
 def _ensure_user_exists_supabase(auth_id_str: str, email: str | None) -> str:
     """
     Supabase SDK版: usersテーブルにレコードがなければ自動作成する。
+    既存レコードとの衝突（email UNIQUE違反等）にも耐える。
 
     Returns:
-        usersテーブルのid（UUID文字列）
+        usersテーブルのid（UUID文字列）。失敗時は HTTPException を送出する。
     """
+    sb = get_supabase()
+
+    # 1. auth_id で検索
+    result = sb.table("users").select("id").eq("auth_id", auth_id_str).execute()
+    if result.data:
+        return str(result.data[0]["id"])
+
+    effective_email = email or f"{auth_id_str}@unknown.com"
+
+    # 2. email で検索（過去に別 auth_id で作成された行がある場合の救済）
+    email_hit = sb.table("users").select("id,auth_id").eq("email", effective_email).execute()
+    if email_hit.data:
+        existing = email_hit.data[0]
+        existing_id = str(existing["id"])
+        # 旧 auth_id が異なるなら現在の auth_id で上書きし、以後の照合を成功させる
+        if str(existing.get("auth_id")) != auth_id_str:
+            try:
+                sb.table("users").update({"auth_id": auth_id_str}).eq("id", existing_id).execute()
+                logger.info(f"既存 users 行を auth_id={auth_id_str} で再紐付けしました (id={existing_id})")
+            except Exception as e:
+                logger.warning(f"users.auth_id 更新失敗（続行）: {e}")
+        return existing_id
+
+    # 3. 新規作成
     try:
-        sb = get_supabase()
-        result = sb.table("users").select("id").eq("auth_id", auth_id_str).execute()
-
-        if result.data:
-            return str(result.data[0]["id"])
-
-        # 新規ユーザー作成
         new_user = sb.table("users").insert({
             "auth_id": auth_id_str,
-            "email": email or f"{auth_id_str}@unknown.com",
+            "email": effective_email,
             "display_name": email.split("@")[0] if email else None,
             "plan": "free",
             "quota_used": 0,
             "quota_limit": 100,
         }).execute()
-
         logger.info(f"新規ユーザーを作成しました: auth_id={auth_id_str}, email={email}")
         return str(new_user.data[0]["id"])
     except Exception as e:
-        logger.warning(f"ユーザー自動作成中にエラー: {e}")
-        return auth_id_str
+        # 競合再取得（race で他プロセスが同時 INSERT した場合など）
+        logger.warning(f"users INSERT 失敗、再検索を試行: {e}")
+        retry = sb.table("users").select("id").eq("auth_id", auth_id_str).execute()
+        if retry.data:
+            return str(retry.data[0]["id"])
+        retry_email = sb.table("users").select("id").eq("email", effective_email).execute()
+        if retry_email.data:
+            return str(retry_email.data[0]["id"])
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"ユーザー登録に失敗しました: {e}",
+        )
 
 
 async def _ensure_user_exists(
