@@ -51,9 +51,9 @@ async def generate_script_sections_parallel(
     body_chars = int(target_chars * 0.80)
     closing_chars = int(target_chars * 0.10)
 
-    # 日本語1文字≈1.5トークン、10%バッファ
+    # 日本語1文字≈1.5トークン、20%バッファ、上限32000
     def _to_tokens(chars: int, extra: int = 50) -> int:
-        return int(chars / 1.5 * 1.1) + extra
+        return min(int(chars * 1.5 * 1.2) + extra, 32000)
 
     (hook_sys, hook_usr), (body_sys, body_usr), (closing_sys, closing_usr) = build_section_prompts(
         title=title,
@@ -91,7 +91,7 @@ async def generate_script_sections_parallel(
             f"あと約{shortage}文字分、自然な続きを追記してください。\n"
             f"追記部分のテキストのみ出力してください（前置き・説明は不要）。"
         )
-        max_tokens = int(shortage / 1.5 * 1.2) + 100
+        max_tokens = min(int(shortage * 1.5 * 1.3) + 100, 32000)
         response = await client.messages.create(
             model="claude-sonnet-4-5",
             max_tokens=max(max_tokens, 200),
@@ -162,11 +162,10 @@ async def generate_script_stream(
     client = anthropic.AsyncAnthropic(api_key=anthropic_api_key or _settings.ANTHROPIC_API_KEY)
 
     # 尺から max_tokens をハードリミットとして計算
-    # 日本語1文字≒1トークン、10%バッファ+500（JSON構造分）
-    # Claudeはプロンプト指示を無視して超過するため、max_tokensで物理的に制限する
+    # 日本語1文字≈1.5トークン、20%バッファ、JSON構造分500、上限32000
     duration_min = _parse_duration_from_context(additional_context)
     target_chars = duration_min * 300
-    max_tokens = int(target_chars / 1.5) + 200  # 日本語1文字≈1.5トークン、JSON構造分200追加
+    max_tokens = min(int(target_chars * 1.5 * 1.2) + 500, 32000)
 
     # ストリーミングで台本生成
     async with client.messages.stream(
