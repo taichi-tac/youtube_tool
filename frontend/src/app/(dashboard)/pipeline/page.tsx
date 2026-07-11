@@ -219,7 +219,7 @@ export default function PipelinePage() {
     setSearchError(null);
     try {
       const pid = await getProjectId();
-      const data = await apiClient.post<VideoResult[]>(`/api/v1/videos/${pid}/search`, {
+      const response = await apiClient.postStream(`/api/v1/videos/${pid}/search`, {
         query: q,
         max_results: searchMaxResults,
         order: "relevance",
@@ -229,6 +229,21 @@ export default function PipelinePage() {
         published_after: publishedAfter ? new Date(publishedAfter).toISOString() : null,
         published_before: publishedBefore ? new Date(publishedBefore).toISOString() : null,
       });
+
+      let data: VideoResult[] | null = null;
+      let sseError: string | null = null;
+      for await (const { event, data: raw } of apiClient.parseSSE(response)) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (event === "done") data = parsed as VideoResult[];
+          else if (event === "error") sseError = parsed.error || "検索に失敗しました";
+        } catch {
+          // ignore parse errors on progress/start
+        }
+      }
+      if (sseError) throw new Error(sseError);
+      if (!data) throw new Error("検索結果が返りませんでした");
+
       setSearchResults(data);
       setSelectedVideoIds(new Set());
       saveToHistory(q);

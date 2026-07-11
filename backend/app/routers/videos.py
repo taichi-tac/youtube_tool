@@ -3,6 +3,8 @@
 YouTube動画の検索・取得・管理を提供する。
 """
 
+import asyncio
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -10,6 +12,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 from app.core.database import get_db, get_supabase, use_supabase_sdk
 from app.core.quota_manager import quota_manager
@@ -91,14 +94,64 @@ def _calc_viral_metrics(
     }
 
 
-@router.post("/{project_id}/search", response_model=list[VideoResponse])
+@router.post("/{project_id}/search")
 async def search_and_save_videos(
     project_id: uuid.UUID,
     body: VideoSearchRequest,
     user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
-    """YouTube動画を検索してDBに保存する"""
+) -> EventSourceResponse:
+    """YouTube動画を検索してDBに保存する（SSE 配信）。
+
+    YouTube API + Supabase への逐次書き込み(≈15件×2query)で 20-40 秒かかり、
+    Cloudflare/Render のアイドルタイムアウトで CORS ヘッダごと落ちてしまう
+    ケースを、SSE の keep-alive (ping=15秒 + 8秒毎の progress) で回避する。
+    """
+    async def _do_work() -> list[dict[str, Any]]:
+        return await _search_and_save_impl(project_id, body, user, db)
+
+    async def event_generator():
+        yield {"event": "start", "data": json.dumps({"pct": 5}, ensure_ascii=False)}
+        task = asyncio.create_task(_do_work())
+        _progress_steps = [15, 30, 45, 60, 75, 85, 92, 96]
+        _step_idx = 0
+        try:
+            while not task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=8.0)
+                except asyncio.TimeoutError:
+                    pct = _progress_steps[min(_step_idx, len(_progress_steps) - 1)]
+                    _step_idx += 1
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({"pct": pct}, ensure_ascii=False),
+                    }
+        except asyncio.CancelledError:
+            raise
+
+        exc = task.exception()
+        if exc:
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(exc)}, ensure_ascii=False),
+            }
+            return
+
+        yield {
+            "event": "done",
+            "data": json.dumps(task.result(), ensure_ascii=False, default=str),
+        }
+
+    return EventSourceResponse(event_generator(), ping=15)
+
+
+async def _search_and_save_impl(
+    project_id: uuid.UUID,
+    body: VideoSearchRequest,
+    user: dict[str, Any],
+    db: AsyncSession,
+) -> list[dict[str, Any]]:
+    """search_and_save_videos の実処理本体。SSE ラッパから呼ばれる。"""
     # プロジェクトのカスタムAPIキーを取得
     user_api_key = None
     if use_supabase_sdk():
@@ -287,7 +340,20 @@ async def search_and_save_videos(
             key=lambda v: float(v.views_per_day or 0),
             reverse=True,
         )
-    return saved_videos
+    return [_video_to_dict(v) for v in saved_videos]
+
+
+def _video_to_dict(v: Any) -> dict[str, Any]:
+    """SQLAlchemy Video → dict 変換（SSE JSON 化用）"""
+    if isinstance(v, dict):
+        return v
+    result: dict[str, Any] = {}
+    for col in v.__table__.columns:
+        val = getattr(v, col.name, None)
+        if isinstance(val, (datetime, uuid.UUID)):
+            val = str(val)
+        result[col.name] = val
+    return result
 
 
 def _extract_youtube_video_id(url: str) -> Optional[str]:
