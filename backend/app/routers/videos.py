@@ -115,32 +115,35 @@ async def search_and_save_videos(
         task = asyncio.create_task(_do_work())
         _progress_steps = [15, 30, 45, 60, 75, 85, 92, 96]
         _step_idx = 0
-        try:
-            while not task.done():
-                try:
-                    await asyncio.wait_for(asyncio.shield(task), timeout=8.0)
-                except asyncio.TimeoutError:
-                    pct = _progress_steps[min(_step_idx, len(_progress_steps) - 1)]
-                    _step_idx += 1
-                    yield {
-                        "event": "progress",
-                        "data": json.dumps({"pct": pct}, ensure_ascii=False),
-                    }
-        except asyncio.CancelledError:
-            raise
+        # asyncio.wait は task の例外を再送出しないので、後段で task.exception() が拾える
+        while not task.done():
+            done_set, _pending = await asyncio.wait({task}, timeout=8.0)
+            if not done_set:
+                pct = _progress_steps[min(_step_idx, len(_progress_steps) - 1)]
+                _step_idx += 1
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({"pct": pct}, ensure_ascii=False),
+                }
 
         exc = task.exception()
-        if exc:
+        if exc is not None:
             yield {
                 "event": "error",
-                "data": json.dumps({"error": str(exc)}, ensure_ascii=False),
+                "data": json.dumps({"error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False),
             }
             return
 
-        yield {
-            "event": "done",
-            "data": json.dumps(task.result(), ensure_ascii=False, default=str),
-        }
+        try:
+            payload = json.dumps(task.result(), ensure_ascii=False, default=str)
+        except Exception as e:
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": f"結果のシリアライズに失敗: {e}"}, ensure_ascii=False),
+            }
+            return
+
+        yield {"event": "done", "data": payload}
 
     return EventSourceResponse(event_generator(), ping=15)
 

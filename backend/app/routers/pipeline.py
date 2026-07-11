@@ -73,16 +73,24 @@ async def full_pipeline(
     if len(body.video_urls) < 1:
         raise HTTPException(status_code=400, detail="URLを1つ以上指定してください")
 
-    # プロファイル取得
+    # プロファイル取得（失敗しても続行して SSE でエラーを返す）
     profile = {}
-    if use_supabase_sdk():
-        sb = get_supabase()
-        result = sb.table("projects").select("*").eq("id", str(project_id)).eq("user_id", user["user_id"]).execute()
-        if result.data:
-            profile = result.data[0]
+    try:
+        if use_supabase_sdk():
+            sb = get_supabase()
+            result = sb.table("projects").select("*").eq("id", str(project_id)).eq("user_id", user["user_id"]).execute()
+            if result.data:
+                profile = result.data[0]
+    except Exception as e:
+        logger_msg = f"プロファイル取得失敗（続行）: {e}"
+        import logging
+        logging.getLogger(__name__).warning(logger_msg)
 
     from app.core.api_keys import fetch_project_keys, get_anthropic_key, get_youtube_key
-    project_keys = fetch_project_keys(project_id)
+    try:
+        project_keys = fetch_project_keys(project_id)
+    except Exception:
+        project_keys = {}
     anthropic_key = get_anthropic_key(project_keys)
     youtube_key = get_youtube_key(project_keys)
 
@@ -101,32 +109,36 @@ async def full_pipeline(
         task = asyncio.create_task(_run())
         _progress_steps = [15, 30, 45, 60, 75, 85, 92, 96]
         _step_idx = 0
-        try:
-            while not task.done():
-                try:
-                    await asyncio.wait_for(asyncio.shield(task), timeout=8.0)
-                except asyncio.TimeoutError:
-                    pct = _progress_steps[min(_step_idx, len(_progress_steps) - 1)]
-                    _step_idx += 1
-                    yield {
-                        "event": "progress",
-                        "data": json.dumps({"pct": pct}, ensure_ascii=False),
-                    }
-        except asyncio.CancelledError:
-            raise
+        # asyncio.wait は task の例外を再送出しないので、
+        # wait_for + shield の「例外が漏れる」問題を回避できる。
+        while not task.done():
+            done_set, _pending = await asyncio.wait({task}, timeout=8.0)
+            if not done_set:
+                pct = _progress_steps[min(_step_idx, len(_progress_steps) - 1)]
+                _step_idx += 1
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({"pct": pct}, ensure_ascii=False),
+                }
 
         exc = task.exception()
-        if exc:
+        if exc is not None:
             yield {
                 "event": "error",
-                "data": json.dumps({"error": str(exc)}, ensure_ascii=False),
+                "data": json.dumps({"error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False),
             }
             return
 
-        yield {
-            "event": "done",
-            "data": json.dumps(task.result(), ensure_ascii=False, default=str),
-        }
+        try:
+            payload = json.dumps(task.result(), ensure_ascii=False, default=str)
+        except Exception as e:
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": f"結果のシリアライズに失敗: {e}"}, ensure_ascii=False),
+            }
+            return
+
+        yield {"event": "done", "data": payload}
 
     return EventSourceResponse(event_generator(), ping=15)
 
