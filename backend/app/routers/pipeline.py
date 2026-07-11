@@ -3,11 +3,14 @@
 リサーチ → 企画 → 台本の一貫フローを提供する。
 """
 
+import asyncio
+import json
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,8 +62,14 @@ async def full_pipeline(
     project_id: uuid.UUID,
     body: PipelineRequest,
     user: dict[str, Any] = Depends(get_current_user),
-) -> dict[str, Any]:
-    """リサーチ→企画→台本パラメータまでの一気通貫パイプライン"""
+) -> EventSourceResponse:
+    """
+    リサーチ→企画→台本パラメータまでの一気通貫パイプライン（SSE 配信）。
+
+    Claude 分析は 20-40 秒かかるため、SSE で 15 秒 ping と 10 秒毎の progress
+    イベントを流し続けて、Render/Cloudflare のアイドルタイムアウトで
+    接続が切れる（結果 CORS ヘッダごと落ちる）ことを防ぐ。
+    """
     if len(body.video_urls) < 1:
         raise HTTPException(status_code=400, detail="URLを1つ以上指定してください")
 
@@ -74,16 +83,52 @@ async def full_pipeline(
 
     from app.core.api_keys import fetch_project_keys, get_anthropic_key, get_youtube_key
     project_keys = fetch_project_keys(project_id)
+    anthropic_key = get_anthropic_key(project_keys)
+    youtube_key = get_youtube_key(project_keys)
 
-    pipeline_result = await pipeline_to_script(
-        video_urls=body.video_urls,
-        profile=profile,
-        project_id=str(project_id),
-        anthropic_api_key=get_anthropic_key(project_keys),
-        youtube_api_key=get_youtube_key(project_keys),
-    )
+    async def _run() -> dict[str, Any]:
+        return await pipeline_to_script(
+            video_urls=body.video_urls,
+            profile=profile,
+            project_id=str(project_id),
+            anthropic_api_key=anthropic_key,
+            youtube_api_key=youtube_key,
+        )
 
-    return pipeline_result
+    async def event_generator():
+        yield {"event": "start", "data": json.dumps({"pct": 5}, ensure_ascii=False)}
+
+        task = asyncio.create_task(_run())
+        _progress_steps = [15, 30, 45, 60, 75, 85, 92, 96]
+        _step_idx = 0
+        try:
+            while not task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=8.0)
+                except asyncio.TimeoutError:
+                    pct = _progress_steps[min(_step_idx, len(_progress_steps) - 1)]
+                    _step_idx += 1
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({"pct": pct}, ensure_ascii=False),
+                    }
+        except asyncio.CancelledError:
+            raise
+
+        exc = task.exception()
+        if exc:
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(exc)}, ensure_ascii=False),
+            }
+            return
+
+        yield {
+            "event": "done",
+            "data": json.dumps(task.result(), ensure_ascii=False, default=str),
+        }
+
+    return EventSourceResponse(event_generator(), ping=15)
 
 
 @router.post("/{project_id}/regenerate-persona")

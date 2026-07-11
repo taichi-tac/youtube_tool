@@ -312,15 +312,40 @@ export default function PipelinePage() {
     setError(null);
     try {
       const pid = await getProjectId();
-      const data = await apiClient.post<any>(`/api/v1/pipeline/${pid}/full`, {
-        video_urls: validUrls,
-      });
-      if (data?.error) {
-        setError(data.error);
+      const response = await apiClient.postStream(
+        `/api/v1/pipeline/${pid}/full`,
+        { video_urls: validUrls },
+      );
+
+      let finalData: any = null;
+      let sseError: string | null = null;
+
+      for await (const { event, data } of apiClient.parseSSE(response)) {
+        try {
+          const parsed = JSON.parse(data);
+          if (event === "done") finalData = parsed;
+          else if (event === "error") sseError = parsed.error || "分析に失敗しました";
+        } catch {
+          // ignore
+        }
+      }
+
+      if (sseError) {
+        setError(sseError);
         setStep("input");
         return;
       }
-      setResult(data);
+      if (!finalData) {
+        setError("分析結果が返りませんでした");
+        setStep("input");
+        return;
+      }
+      if (finalData.error) {
+        setError(finalData.error);
+        setStep("input");
+        return;
+      }
+      setResult(finalData);
       setStep("result");
     } catch (err) {
       setError(err instanceof Error ? err.message : "分析に失敗しました");
